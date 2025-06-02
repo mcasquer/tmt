@@ -8,19 +8,10 @@ ARTIFACTS=$TMT_REPORT_ARTIFACTS_URL
 
 PLAN_PREFIX='/plan'
 PLAN_STATUS='FAILED'
-TEST_PREFIX=''
-
-# TODO: Subresults for beakerlib
-declare -A test=([1,'uuid']="" [1,'name']='/test/bad'        [1,'status']='FAILED'
-                 [2,'uuid']="" [2,'name']='/test/good'       [2,'status']='PASSED'
-                 [3,'uuid']="" [3,'name']='/test/subresults' [3,'status']='FAILED'
-                 [4,'uuid']="" [4,'name']='/subtest/good' [4,'status']='PASSED'
-                 [5,'uuid']="" [5,'name']='/subtest/fail' [5,'status']='FAILED'
-                 [6,'uuid']="" [6,'name']='/subtest/weird' [6,'status']='FAILED'
-                 [7,'uuid']="" [7,'name']='/test/subresults-restraint/subtest-restraint/good' [7,'status']='PASSED'
-                 [8,'uuid']="" [8,'name']='/test/subresults-restraint/subtest-restraint/fail' [8,'status']='FAILED'
-                 [9,'uuid']="" [9,'name']='/test/subresults-restraint/subtest-restraint/weird' [9,'status']='FAILED'
-                 [10,'uuid']="" [10,'name']='/test/weird'      [10,'status']='FAILED')
+TEST_PREFIX='/test'
+declare -A test=([1,'uuid']="" [1,'name']='/bad'   [1,'status']='FAILED'
+                 [2,'uuid']="" [2,'name']='/good'  [2,'status']='PASSED'
+                 [3,'uuid']="" [3,'name']='/weird' [3,'status']='FAILED')
 DIV="|"
 
 
@@ -65,16 +56,15 @@ function identify_suite(){
 # Read and verify reported test names and uuids from $rlRun_LOG
 #
 # GLOBALS:
-# >> $test_uuid[1..10], $test_fullname[1..10]
+# >> $test_uuid[1..3], $test_fullname[1..3]
 function identify_tests(){
     rlLog "Verify and get test data"
 
-    for i in {1..10}; do
+    for i in {1..3}; do
         test_fullname[$i]=${TEST_PREFIX}${test[$i,'name']}
 
-        rlAssertGrep " \(sub-\)\?test: ${test_fullname[$i]}" $rlRun_LOG
         rlAssertGrep "test: ${test_fullname[$i]}" $rlRun_LOG
-        test_uuid[$i]=$(rlRun "grep -m$i -A1 ' \(sub-\)\?test:' $rlRun_LOG | tail -n1 | awk '{print \$NF}' ")
+        test_uuid[$i]=$(rlRun "grep -m$i -A1 'test:' $rlRun_LOG | tail -n1 | awk '{print \$NF}' ")
         rlAssertNotEquals "Assert the test$i UUID is not empty" "${test_uuid[$i]}" ""
         test[$i,'uuid']=${test_uuid[$i]}
     done
@@ -87,8 +77,9 @@ function identify_tests(){
 # ARGUMENT:
 #   request_url
 function rest_api(){
+
     rlLog "REST API request (GET $1)"
-    response=$(curl --write-out "$DIV%{http_code}" --silent -X GET "$1" -H  "Accept: */*" -H  "Authorization: Bearer $TOKEN")
+    response=$(curl --write-out "$DIV%{http_code}" --silent -X GET "$1" -H  "accept: */*" -H  "Authorization: bearer $TOKEN")
 
     response_code=${response##*"$DIV"}
     response=${response%"$DIV"*}
@@ -111,6 +102,7 @@ rlJournalStart
         fi
     rlPhaseEnd
 
+
     echo -e "\n\n\n::   PART 1\n"
 
     rlPhaseStartTest "Core Functionality"
@@ -120,9 +112,9 @@ rlJournalStart
         # TMT RUN
         rlLogInfo "A run with default setup"
         rlRun -s "tmt run --id $run --verbose --all" 2
-        rlAssertGrep "url: https?://.*\.redhat\.com/ui/#${PROJECT}/launches/all/[0-9]+" $rlRun_LOG -Eq
+        rlAssertGrep "url: http.*redhat.com.ui/#${PROJECT}/launches/all/[0-9]{4}" $rlRun_LOG -Eq
         identify_launch  # >> $launch_uuid, $launch_id
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
     rlPhaseEnd
 
 
@@ -158,15 +150,10 @@ rlJournalStart
         done
         rm tmp_attributes*
 
-        for i in {1..10}; do
+        for i in {1..3}; do
             echo ""
             test_name[$i]=${test[$i,'name']}
             test_name=${test_name[$i]}
-
-            # Strip the '/test' prefix from the name cause the tests are saved
-            # in `test.fmf` without this prefix.
-            test_name=${test_name#/test}
-
             test_fullname=${test_fullname[$i]}
             test_uuid=${test_uuid[$i]}
             test_status[$i]=${test[$i,'status']}
@@ -179,53 +166,43 @@ rlJournalStart
             rlAssertNotEquals "Assert the test id is not empty" "$test_id" ""
             rlAssertEquals "Assert the name is correct" "$(echo $response | jq -r '.name')" "$test_fullname"
             rlAssertEquals "Assert the status is correct" "$(echo $response | jq -r '.status')" "$test_status"
-            test_description=$(yq -er ".\"$test_name\".summary" test.fmf) || test_description=''
-            rlAssertEquals "Assert the description is correct" "$(echo $response | jq -r '.description // ""')" "$test_description"
+            test_description=$(yq -r ".\"$test_name\".summary" test.fmf)
+            rlAssertEquals "Assert the description is correct" "$(echo $response | jq -r '.description')" "$test_description"
             test_case_id=$(yq -r ".\"$test_name\".id" test.fmf)
-
             [[ $test_case_id != null ]] && rlAssertEquals "Assert the testCaseId is correct" "$(echo $response | jq -r '.testCaseId')" "$test_case_id"
 
-            # Check the test attributes only for parent test items, do not check them for subresults
-            if [[ ! "$test_name" =~ ^/subtest/ ]]; then
+            for jq_element in attributes parameters; do
+
                 # Check all the common test attributes/parameters
-                for jq_element in attributes parameters; do
-                    [[ $jq_element == attributes ]] && fmf_label="context"
-                    [[ $jq_element == parameters ]] && fmf_label="environment"
-                    rlLogInfo "Check the $jq_element for test $test_name ($fmf_label)"
-                    echo "$response" | jq -r ".$jq_element" > tmp_attributes.json || rlFail "$jq_element listing into tmp_attributes.json"
-                    length=$(yq -r ".$fmf_label | length" plan.fmf)
-                    for ((item_index=0; item_index<$length; item_index++ )); do
-                        key=$(yq -r ".$fmf_label | keys | .[$item_index]" plan.fmf)
-                        value=$(yq -r ".$fmf_label.$key" plan.fmf)
+                [[ $jq_element == attributes ]] && fmf_label="context"
+                [[ $jq_element == parameters ]] && fmf_label="environment"
+                rlLogInfo "Check the $jq_element for test $test_name ($fmf_label)"
+                echo "$response" | jq -r ".$jq_element" > tmp_attributes.json || rlFail "$jq_element listing into tmp_attributes.json"
+                length=$(yq -r ".$fmf_label | length" plan.fmf)
+                for ((item_index=0; item_index<$length; item_index++ )); do
+                    key=$(yq -r ".$fmf_label | keys | .[$item_index]" plan.fmf)
+                    value=$(yq -r ".$fmf_label.$key" plan.fmf)
+                    rlAssertGrep "$key" tmp_attributes.json -A1 > tmp_attributes_selection
+                    rlAssertGrep "$value" tmp_attributes_selection
+                done
+
+                # Check the rarities in the test attributes/parameters
+                if [[ $jq_element == attributes ]]; then
+                    key="contact"
+                    value="$(yq -r ".\"$test_name\".$key" test.fmf)"
+                    if [[ $value != null ]]; then
                         rlAssertGrep "$key" tmp_attributes.json -A1 > tmp_attributes_selection
                         rlAssertGrep "$value" tmp_attributes_selection
-                    done
-
-                    # Check the rarities in the test attributes/parameters
-                    if [[ $jq_element == attributes ]]; then
-                        key="contact"
-                        value="$(yq -r ".\"$test_name\".$key" test.fmf)"
-
-                        if [[ $value != null ]]; then
-                            # Get the contact items as values separated by a comma
-                            value="$(yq -r '. | join(",")' <<< $value)"
-                            rlAssertGrep "$key" tmp_attributes.json -A1 > tmp_attributes_selection
-
-                            IFS=, read -r -a contact_items <<< "$value"
-                            for contact_item in "${contact_items[@]}"; do
-                                rlAssertGrep "$contact_item" tmp_attributes_selection
-                            done
-                        else
-                            rlAssertNotGrep "$key" tmp_attributes.json
-                        fi
-                    elif [[ $jq_element == parameters ]]; then
-                        key="TMT_TREE"
+                    else
                         rlAssertNotGrep "$key" tmp_attributes.json
                     fi
+                elif [[ $jq_element == parameters ]]; then
+                    key="TMT_TREE"
+                    rlAssertNotGrep "$key" tmp_attributes.json
+                fi
 
-                    rm tmp_attributes*
-                done
-            fi
+                rm tmp_attributes*
+            done
 
             # REST API | [GET] log-controller | parent_id
             rlLogInfo "Get all logs from the test $test_name"
@@ -234,9 +211,7 @@ rlJournalStart
             level=("INFO" "ERROR")
             for ((content_index=0; content_index<$length; content_index++ )); do
                 rlAssertEquals "Assert the level of the info log is correct" "$(echo $response | jq -r .content[$content_index].level)" "${level[$content_index]}"
-
-                # Check the log message is correct (except the weird parent test)
-                if [[ $i -ne 10 ]]; then
+                if [[ $i -ne 3 ]]; then
                     log_message=$(yq -r ".\"$test_name\".test" test.fmf | awk -F '"' '{print $2}' )
                     rlAssertEquals "Assert the message of the info log is correct" "$(echo $response | jq -r .content[$content_index].message)" "$log_message"
                 fi
@@ -244,6 +219,7 @@ rlJournalStart
         done
 
     rlPhaseEnd
+
 
     echo -e "\n\n\n::   PART 2\n"
 
@@ -256,24 +232,16 @@ rlJournalStart
         rlRun -s "tmt run --verbose --all report --how reportportal --launch-per-plan --launch '$launch_name' " 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         rlAssertNotGrep "suite:" $rlRun_LOG
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
 
         # REST API | [GET] test-item-controller | launch_id
         rlLogInfo "Get info about all launch items"
         response=$(rest_api "$URL/api/v1/$PROJECT/item?filter.eq.launchId=$launch_id")
         length=$(echo $response | jq -r ".content | length")
         for ((content_index=0; content_index<$length; content_index++ )); do
-            parent_item_json=$(echo $response | jq -r .content[$content_index])
-            parent_item_name=$(echo $parent_item_json | jq -r .name)
-
-            if jq -e '.name == "/test/subresults"' <<< "$parent_item_json" > /dev/null; then
-                # All parent tests with subresults must have child subresult items
-                rlAssertEquals "Assert the item ($parent_item_name) has child items" "$(echo $parent_item_json | jq -r .hasChildren)" "true"
-            else
-                # Tests with no subresults must not have any child items
-                rlAssertEquals "Assert the item ($parent_item_name) has no child items" "$(echo $parent_item_json | jq -r .hasChildren)" "false"
-            fi
+            rlAssertEquals "Assert the item is no suite" "$(echo $response | jq -r .content[$content_index].hasChildren)" "false"
         done
+
     rlPhaseEnd
 
     # Testing suite-per-plan mapping with launch-suite-test structure
@@ -289,7 +257,7 @@ rlJournalStart
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '$launch_name' --launch-description '$launch_description'" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         identify_suite   # >> $suite_uuid, $suite_id
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
         echo ""
 
         # REST API | [GET] launch-controller | uuid
@@ -320,25 +288,15 @@ rlJournalStart
         length=$(echo $response | jq -r ".content | length")
         for ((content_index=0; content_index<$length; content_index++ )); do
             echo ""
-
-            parent_item_json=$(echo $response | jq -r .content[$content_index])
-            parent_item_name=$(echo $parent_item_json | jq -r .name)
-
             if [[ $content_index -eq 0 ]]; then
-                # Check the suite item
-                rlAssertEquals "Assert the item is a suite" "$(echo $parent_item_json | jq -r .hasChildren)" "true"
-                rlAssertEquals "Assert the name of suite item ${suite_name}" "$(echo $parent_item_json | jq -r .name)" "${suite_name}"
-                rlAssertEquals "Assert the description of suite item ${suite_name}" "$(echo $parent_item_json | jq -r .description)" "${plan_summary}<br>${launch_description}"
+                rlAssertEquals "Assert the item is a suite" "$(echo $response | jq -r .content[$content_index].hasChildren)" "true"
+                rlAssertEquals "Assert the name of suite item ${suite_name}" "$(echo $response | jq -r .content[$content_index].name)" "${suite_name}"
+                rlAssertEquals "Assert the description of suite item ${suite_name}" "$(echo $response | jq -r .content[$content_index].description)" "$plan_summary"
             else
-                if jq -e '.name == "/test/subresults"' <<< "$parent_item_json" > /dev/null; then
-                    # All parent tests with subresults must have child subresult items
-                    rlAssertEquals "Assert the item (${parent_item_name}) has child items" "$(echo $parent_item_json | jq -r .hasChildren)" "true"
-                else
-                    # Tests with no subresults must not have any child items
-                    rlAssertEquals "Assert the item (${parent_item_name}) has no child items" "$(echo $parent_item_json | jq -r .hasChildren)" "false"
-                fi
-                rlAssertEquals "Assert the name of test item ${test_fullname[$content_index]}" "$(echo $parent_item_json | jq -r .name)" "${test_fullname[$content_index]}"
-                rlAssertEquals "Assert the UUID of test item ${test_fullname[$content_index]}" "$(echo $parent_item_json | jq -r .uuid)" "${test_uuid[$content_index]}"
+                i=$content_index
+                rlAssertEquals "Assert the item is no suite" "$(echo $response | jq -r .content[$content_index].hasChildren)" "false"
+                rlAssertEquals "Assert the name of test item ${test_name[$i]}" "$(echo $response | jq -r .content[$content_index].name)" "${test_fullname[$i]}"
+                rlAssertEquals "Assert the UUID of test item ${test_name[$i]}" "$(echo $response | jq -r .content[$content_index].uuid)" "${test_uuid[$i]}"
             fi
         done
 
@@ -352,7 +310,7 @@ rlJournalStart
         # TMT RUN [0]
         rlLogInfo "Initial run that creates a launch for history"
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '${launch_name}_1'" 2 "" 1>/dev/null
-        for i in {1..10}; do
+        for i in {1..3}; do
             echo ""
             test_fullname=${TEST_PREFIX}${test[$i,'name']}
             test_uuid=$(rlRun "grep -m$i -A1 'test:' $rlRun_LOG | tail -n1 | awk '{print \$NF}' ")
@@ -370,7 +328,7 @@ rlJournalStart
         # TMT RUN [1]
         rlLogInfo "A run that creates a launch with filtered environment variables (by default)"
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '${launch_name}_2'" 2 "" 1>/dev/null
-        for i in {1..10}; do
+        for i in {1..3}; do
             echo ""
             test_name=${test[$i,'name']}
             test_fullname=${TEST_PREFIX}${test_name}
@@ -394,7 +352,7 @@ rlJournalStart
         # TMT RUN [2]
         rlLogInfo "A run that creates a launch without filtering the environment variables that break history aggregation"
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '${launch_name}_3' --exclude-variables ''" 2 "" 1>/dev/null
-        for i in {1..10}; do
+        for i in {1..3}; do
             echo ""
             test_name=${test[$i,'name']}
             test_fullname=${TEST_PREFIX}${test_name}
@@ -409,12 +367,7 @@ rlJournalStart
             test_case_id=$(yq -r ".\"$test_name\".id" test.fmf)
             [[ $test_case_id != null ]] && rlAssertEquals "Assert the test ${test_name} has a correct testCaseId" "$(echo $response | jq -r '.testCaseId')" "$test_case_id"
             echo "$response" | jq -r ".$jq_element" > tmp_attributes.json || rlFail "$jq_element listing into tmp_attributes.json"
-
-            # FIXME: Ignore the check for subtests
-            if [[ ! "$test_name" =~ ^/subtest/ ]]; then
-                rlAssertGrep "TMT_TREE" tmp_attributes.json
-            fi
-
+            rlAssertGrep "TMT_TREE" tmp_attributes.json
             rm tmp_attributes*
 
             # history is not aggregated unless test case id is defined for given test (only test_2)
@@ -437,7 +390,7 @@ rlJournalStart
         # TMT RUN [0]
         rlLogInfo "Initial run that creates a launch"
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '$launch_name'" 2 "" 1>/dev/null
-        for i in {1..10}; do
+        for i in {1..3}; do
             core_test_uuid[$i]=$(rlRun "grep -m$i -A1 'test:' $rlRun_LOG | tail -n1 | awk '{print \$NF}' ")
             rlAssertNotEquals "Assert the test$i UUID is not empty" "{$core_test_uuid[$i]}" ""
         done
@@ -448,7 +401,7 @@ rlJournalStart
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '$launch_name' --launch-rerun" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         identify_suite   # >> $suite_uuid
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
         rlAssertGrep "suite: $suite_name" $rlRun_LOG
 
         # REST API | [GET] launch-controller | uuid
@@ -477,7 +430,7 @@ rlJournalStart
         # TMT RUN [0]
         rlLogInfo "Initial run that creates a launch"
         rlRun -s "tmt run --verbose --all report --how reportportal --suite-per-plan --launch '$launch_name'" 2 "" 1>/dev/null
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
         echo ""
 
         # TMT RE-RUN [1]
@@ -526,7 +479,7 @@ rlJournalStart
         rlLogInfo "Initial run that only creates an empty launch (with empty suite and empty test items within) with defect type 'Idle' (pre-defined in the project within 'To Investigate' category)"
         rlRun -s "tmt run discover report --verbose --how reportportal --suite-per-plan --launch '$launch_name' --defect-type 'IDLE'" 3  "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
-        identify_tests   # >> $test_uuid[1..10], $test_fullname[1..10]
+        identify_tests   # >> $test_uuid[1..3], $test_fullname[1..3]
 
         # REST API | [GET] test-item-controller | launch_id
         rlLogInfo "Get info about all launch items"
@@ -566,8 +519,7 @@ rlJournalStart
         suite_name=$PLAN_PREFIX
 
         # TMT RUN [0]
-        # FIXME: 7 tests within? - spis ne - opravit
-        rlLogInfo "Initial run that creates a launch (with suite item and 7 test items within)"
+        rlLogInfo "Initial run that creates a launch (with suite item and 3 test items within)"
         rlRun -s "tmt run --all report --verbose --how reportportal --suite-per-plan --launch '$launch_name'" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         init_launch_uuid=$launch_uuid
@@ -575,12 +527,11 @@ rlJournalStart
         # REST API | [GET] test-item-controller | launch_id
         rlLogInfo "Get info about all launch items (1)"
         response=$(rest_api "$URL/api/v1/$PROJECT/item?filter.eq.launchId=$launch_id")
-        rlAssertEquals "Assert launch contains suite and 7 test items" "$(echo $response | jq -r .page.totalElements)" "7"
+        rlAssertEquals "Assert launch contains suite and 3 test items" "$(echo $response | jq -r .page.totalElements)" "4"
         echo ""
 
         # TMT RUN [1]
-        # FIXME: 7 tests  - spis ne - opravit
-        rlLogInfo "Additional run for an upload (of a suite item with 7 test items) to the launch"
+        rlLogInfo "Additional run for an upload (of a suite item with 3 test items) to the launch"
         rlRun -s "tmt run --all report --verbose --how reportportal --suite-per-plan --upload-to-launch '$launch_id'" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         rlAssertEquals "Assert the launch UUID is the same as the initial one" "$init_launch_uuid" "$launch_uuid"
@@ -588,19 +539,19 @@ rlJournalStart
         # REST API | [GET] test-item-controller | launch_id
         rlLogInfo "Get info about all launch items (2)"
         response=$(rest_api "$URL/api/v1/$PROJECT/item?filter.eq.launchId=$launch_id")
-        rlAssertEquals "Assert launch contains another suite and 7 test items" "$(echo $response | jq -r .page.totalElements)" "8"
+        rlAssertEquals "Assert launch contains another suite and 3 test items" "$(echo $response | jq -r .page.totalElements)" "8"
         echo ""
 
         # TMT RUN [2]
-        rlLogInfo "Additional run for an upload (of 7 test items) to the launch"
+        rlLogInfo "Additional run for an upload (of 3 test items) to the launch"
         rlRun -s "tmt run --all report --verbose --how reportportal --launch-per-plan --upload-to-launch '$launch_id'" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         rlAssertEquals "Assert the launch UUID is the same as the initial one" "$init_launch_uuid" "$launch_uuid"
 
         # REST API | [GET] test-item-controller | launch_id
-        rlLogInfo "Get info about all launch items (7)"
+        rlLogInfo "Get info about all launch items (3)"
         response=$(rest_api "$URL/api/v1/$PROJECT/item?filter.eq.launchId=$launch_id")
-        rlAssertEquals "Assert launch contains another 7 test items" "$(echo $response | jq -r .page.totalElements)" "11"
+        rlAssertEquals "Assert launch contains another 3 test items" "$(echo $response | jq -r .page.totalElements)" "11"
     rlPhaseEnd
 
 
@@ -610,7 +561,7 @@ rlJournalStart
         suite_name=$PLAN_PREFIX
 
         # TMT RUN [0]
-        rlLogInfo "Initial run that creates a suite item (with 7 test items)"
+        rlLogInfo "Initial run that creates a suite item (with 3 test items)"
         rlRun -s "tmt run --all report --verbose --how reportportal --suite-per-plan --launch '$launch_name'" 2 "" 1>/dev/null
         identify_launch  # >> $launch_uuid, $launch_id
         identify_suite   # >> $suite_uuid

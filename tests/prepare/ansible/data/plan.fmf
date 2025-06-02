@@ -32,5 +32,6 @@ prepare:
       - name: Ansible we want to test
         order: 85
         how: ansible
-        playbook: http://localhost:8000/playbook.yml
+        # This is the very same playbook as the local one, just living in tmt's repository.
+        playbook: https://raw.githubusercontent.com/teemtee/tmt/main/tests/prepare/ansible/data/playbook.yml
         extra-args: '-vvv -e ansible_remote_tmp=/tmp'

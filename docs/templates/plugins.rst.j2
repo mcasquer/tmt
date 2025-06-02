@@ -1,45 +1,17 @@
-{% if STEP != 'prepare-feature' %}
 :tocdepth: 0
-{% endif %}
-
-{% if STEP == 'prepare-feature' %}
-    {% set page_header_char = '-' %}
-    {% set plugin_header_char = '^' %}
-    {% set plugin_configuration_header_char = '#' %}
-
-    {% macro render_page_header() %}{% endmacro %}
-
-{% else %}
-    {% set page_header_char = '~' %}
-    {% set plugin_header_char = '-' %}
-    {% set plugin_configuration_header_char = '^' %}
-
-    {% macro render_page_header() %}
-.. _/plugins/{{ STEP }}:
-
-{{ render_header((STEP | replace('-', ' ') | capitalize) + ' Plugins', page_header_char) }}
-    {% endmacro %}
-
-{% endif %}
-
-{% macro render_header(name, char) %}
-{{ name }}
-{{ char * (name | length) }}
-{% endmacro %}
-
-{% macro render_plugin_header(name) %}
-{{ render_header(name, plugin_header_char) }}
-{% endmacro %}
-
-{% macro render_plugin_configuration_header(name) %}
-{{ render_header(name, plugin_configuration_header_char) }}
-{% endmacro %}
 
 {% macro render_field(plugin_id, plugin_data_class, field_name) %}
     {% set _, option, _, _, metadata = container_field(plugin_data_class, field_name) %}
-    {% set envvar = metadata.envvar or "TMT_PLUGIN_%s_%s_%s" | format(STEP.upper(), plugin_id.upper(), field_name.replace('-', '_').upper()) %}
 
-{{ option }}
+    {% if metadata.metavar %}
+{{ option }}: ``{{ metadata.metavar }}``
+    {% elif metadata.default is boolean %}
+{{ option }}: ``true|false``
+    {% elif metadata.choices %}
+{{ option }}: ``{{ metadata.choices }}``
+    {% else %}
+{{ option }}:
+    {% endif %}
     {% if metadata.help %}
 {{ metadata.help | trim | indent(4, first=true) }}
     {% endif %}
@@ -52,8 +24,6 @@
     Default: ``{{ actual_default }}``
         {% elif actual_default is integer %}
     Default: ``{{ actual_default }}``
-        {% elif actual_default is unit %}
-    Default: ``{{ actual_default }}``
         {% elif actual_default is none %}
     Default: *not set*
         {% elif actual_default is sequence %}
@@ -65,68 +35,25 @@
         {% elif is_enum(actual_default) %}
     Default: ``{{ actual_default.value }}``
         {% else %}
-            {% set error_message = "%s/%s.%s: could not render default value, '%s'" | format(STEP, plugin_id, field_name, actual_default) %}
-            {{ raise_error(error_message) }}
+            {% set _ = LOGGER.warn("%s/%s.%s: could not render default value, '%s'" | format(STEP, plugin_id, field_name, actual_default), shift=0) %}
+    Default: *could not render default value correctly*
         {% endif %}
-    {% endif %}
-
-    Environment variable: ``{{ envvar }}``
-
-    In plan metadata:
-
-    .. code-block:: yaml
-
-    {% if metadata.metavar %}
-       {{ option }}: {{ metadata.metavar }}
-
-        {% for example in metadata.help_example_values %}
-       {{ option }}: {{ example }}
-        {% endfor %}
-    {% elif metadata.default is boolean %}
-       {{ option }}: true|false
-    {% else %}
-       {{ option }}:
-    {% endif %}
-
-    On command-line:
-
-    .. code-block:: shell
-
-    {% if metadata.metavar %}
-       --{{ option }} {{ metadata.metavar | shell_quote }}
-       export {{ envvar }}={{ metadata.metavar | shell_quote }}
-
-        {% for example in metadata.help_example_values %}
-       --{{ option }} {{ example | shell_quote }}
-        {% endfor %}
-        {% for example in metadata.help_example_values %}
-       export {{ envvar }}={{ example | shell_quote }}
-        {% endfor %}
-    {% elif metadata.default is boolean %}
-       --{{ option }}
-       export {{ envvar }}=1|0
-    {% else %}
-       --{{ option }} ...
-       export {{ envvar }}=...
-
-        {% for example in metadata.help_example_values %}
-       --{{ option }} {{ example | shell_quote }}
-        {% endfor %}
-        {% for example in metadata.help_example_values %}
-       export {{ envvar }}={{ example | shell_quote }}
-        {% endfor %}
     {% endif %}
 {% endmacro %}
 
-{{ render_page_header() }}
+.. _/plugins/{{ STEP }}:
+
+{{ STEP | replace('-', ' ') | capitalize }} Plugins
+{{ '~' * (8 + (STEP | length)) }}
 
 .. include:: {{ STEP }}-header.inc.rst
 
 {% for PLUGIN_ID, PLUGIN, PLUGIN_DATA_CLASS in PLUGINS() %}
-    {% if loop.first and STEP != 'prepare-feature' %}
+    {% if loop.first %}
 .. _/plugins/{{ STEP }}/common-keys:
 
-{{ render_plugin_header('Common Keys') }}
+Common Keys
+-----------
 
 The following keys are accepted by all plugins of the ``{{ STEP }}`` step.
 
@@ -135,11 +62,10 @@ The following keys are accepted by all plugins of the ``{{ STEP }}`` step.
         {% endfor %}
     {% endif %}
 
-{% if STEP != 'prepare-feature' %}
 .. _/plugins/{{ STEP }}/{{ PLUGIN_ID | trim }}:
-{% endif %}
 
-{{ render_plugin_header(PLUGIN_ID) }}
+{{ PLUGIN_ID }}
+{{ '-' * (PLUGIN_ID | length) }}
 
 {# Emit the warning only for plugins that have not been reviewed yet. #}
 {% set plugin_full_id = STEP + "/" + PLUGIN_ID %}
@@ -156,63 +82,20 @@ The following keys are accepted by all plugins of the ``{{ STEP }}`` step.
 {{ PLUGIN.__doc__ | dedent | trim }}
 {% endif %}
 
-{% if plugin_full_id in HINTS %}
-.. note::
+{% set intrinsic_fields = container_intrinsic_fields(PLUGIN_DATA_CLASS) | sort %}
 
-{{ HINTS[plugin_full_id].text | indent(3, first=true) }}
-{% endif %}
-
-{% if STEP == 'prepare-feature' %}
-    {#
-      When rendering prepare/feature plugins, emit only a reduced version of
-      plugin configuration: no shared keys, just the intrinsic ones.
-    #}
-
-    {% set intrinsic_fields = container_intrinsic_fields(PLUGIN_DATA_CLASS) | sort %}
-
-    {% if intrinsic_fields %}
-        {% for field_name in intrinsic_fields %}
-{{ render_field(PLUGIN_ID, PLUGIN_DATA_CLASS, field_name) }}
-        {% endfor %}
-
-        {% if not loop.last %}
-----
-        {% endif %}
-
-    {% endif %}
-
-{% elif STEP == 'prepare' and PLUGIN_ID == 'feature' %}
-    {#
-      Since prepare/feature does not have intrinsic keys of its own,
-      and all its keys are keys of its plugins, include the generated
-      document describing the plugins instead of rendering any keys.
-    #}
-
-See also :ref:`Common Keys{# djlint:off H025 #}</plugins/prepare/common-keys>{# djlint:on H025 #}` accepted by the plugin.
-
-.. include:: prepare-feature.rst
-
-{% else %}
-    {#
-      And for all other plugins, render their intrinsic keys, and don't
-      forget to point to the shared ones.
-    #}
-
-    {% set intrinsic_fields = container_intrinsic_fields(PLUGIN_DATA_CLASS) | sort %}
-
-    {% if intrinsic_fields %}
-{{ render_plugin_configuration_header('Configuration') }}
+{% if intrinsic_fields %}
+Configuration
+^^^^^^^^^^^^^
 
 See also :ref:`Common Keys{# djlint:off H025 #}</plugins/{{ STEP }}/common-keys>{# djlint:on H025 #}` accepted by the plugin.
 
-        {% for field_name in intrinsic_fields %}
+{% for field_name in intrinsic_fields %}
 {{ render_field(PLUGIN_ID, PLUGIN_DATA_CLASS, field_name) }}
-        {% endfor %}
+{% endfor %}
 
-        {% if not loop.last %}
+{% if not loop.last %}
 ----
-        {% endif %}
-    {% endif %}
 {% endif %}
-
+{% endif %}
 {% endfor %}

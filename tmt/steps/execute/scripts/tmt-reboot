@@ -18,7 +18,6 @@ while getopts "c:t:e" flag; do
         c) command="${OPTARG}";;
         t) timeout="${OPTARG}";;
         e) efi=False;;
-        *) exit 1;;
     esac
 done
 
@@ -31,7 +30,7 @@ if [ $efi = True ]; then
         fi
         if [[ -n "$os_boot_entry" ]] ; then
             logger -s "efibootmgr -n $os_boot_entry"
-            efibootmgr -n "$os_boot_entry"
+            efibootmgr -n $os_boot_entry
         else
             logger -s "Could not determine value for BootNext!"
         fi

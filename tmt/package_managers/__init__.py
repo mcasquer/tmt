@@ -1,13 +1,13 @@
+import dataclasses
 import shlex
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import tmt
 import tmt.log
 import tmt.plugins
 import tmt.utils
-from tmt.container import container, simple_field
-from tmt.utils import Command, CommandOutput, Path, ShellScript
+from tmt.utils import Command, CommandOutput, Path
 
 if TYPE_CHECKING:
     from tmt._compat.typing import TypeAlias
@@ -21,9 +21,7 @@ if TYPE_CHECKING:
 # Installable objects
 #
 class Package(str):
-    """
-    A package name
-    """
+    """ A package name """
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, (Package, PackageUrl, FileSystemPath, PackagePath)):
@@ -33,9 +31,7 @@ class Package(str):
 
 
 class PackageUrl(str):
-    """
-    A URL of a package file
-    """
+    """ A URL of a package file """
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, (Package, PackageUrl, FileSystemPath, PackagePath)):
@@ -45,9 +41,7 @@ class PackageUrl(str):
 
 
 class FileSystemPath(Path):
-    """
-    A filesystem path provided by a package
-    """
+    """ A filesystem path provided by a package """
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, (Package, PackageUrl, FileSystemPath, PackagePath)):
@@ -57,9 +51,7 @@ class FileSystemPath(Path):
 
 
 class PackagePath(Path):
-    """
-    A path to a package file
-    """
+    """ A path to a package file """
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, (Package, PackageUrl, FileSystemPath, PackagePath)):
@@ -72,43 +64,33 @@ class PackagePath(Path):
 Installable = Union[Package, FileSystemPath, PackagePath, PackageUrl]
 
 
-PackageManagerEngineT = TypeVar('PackageManagerEngineT', bound='PackageManagerEngine')
-PackageManagerClass = type['PackageManager[PackageManagerEngineT]']
+PackageManagerClass = type['PackageManager']
 
 
-_PACKAGE_MANAGER_PLUGIN_REGISTRY: tmt.plugins.PluginRegistry[
-    'PackageManagerClass[PackageManagerEngine]'
-] = tmt.plugins.PluginRegistry('package_managers')
+_PACKAGE_MANAGER_PLUGIN_REGISTRY: tmt.plugins.PluginRegistry[PackageManagerClass] = \
+    tmt.plugins.PluginRegistry()
 
 
 def provides_package_manager(
-    package_manager: str,
-) -> Callable[
-    ['PackageManagerClass[PackageManagerEngineT]'], 'PackageManagerClass[PackageManagerEngineT]'
-]:
+        package_manager: str) -> Callable[[PackageManagerClass], PackageManagerClass]:
     """
     A decorator for registering package managers.
 
     Decorate a package manager plugin class to register a package manager.
     """
 
-    def _provides_package_manager(
-        package_manager_cls: 'PackageManagerClass[PackageManagerEngineT]',
-    ) -> 'PackageManagerClass[PackageManagerEngineT]':
+    def _provides_package_manager(package_manager_cls: PackageManagerClass) -> PackageManagerClass:
         _PACKAGE_MANAGER_PLUGIN_REGISTRY.register_plugin(
             plugin_id=package_manager,
-            plugin=package_manager_cls,  # type: ignore[arg-type]
-            logger=tmt.log.Logger.get_bootstrap_logger(),
-        )
+            plugin=package_manager_cls,
+            logger=tmt.log.Logger.get_bootstrap_logger())
 
         return package_manager_cls
 
     return _provides_package_manager
 
 
-def find_package_manager(
-    name: 'GuestPackageManager',
-) -> 'PackageManagerClass[PackageManagerEngine]':
+def find_package_manager(name: 'GuestPackageManager') -> 'PackageManagerClass':
     """
     Find a package manager by its name.
 
@@ -119,8 +101,7 @@ def find_package_manager(
 
     if plugin is None:
         raise tmt.utils.GeneralError(
-            f"Package manager '{name}' was not found in package manager registry."
-        )
+            f"Package manager '{name}' was not found in package manager registry.")
 
     return plugin
 
@@ -131,10 +112,10 @@ def escape_installables(*installables: Installable) -> Iterator[str]:
 
 
 # TODO: find a better name, "options" is soooo overloaded...
-@container(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Options:
     #: A list of packages to exclude from installation.
-    excluded_packages: list[Package] = simple_field(default_factory=list[Package])
+    excluded_packages: list[Package] = dataclasses.field(default_factory=list)
 
     #: If set, a failure to install a given package would not cause an error.
     skip_missing: bool = False
@@ -155,69 +136,10 @@ class Options:
     allow_untrusted: bool = False
 
 
-class PackageManagerEngine(tmt.utils.Common):
-    command: Command
-    options: Command
-
-    def __init__(self, *, guest: 'Guest', logger: tmt.log.Logger) -> None:
-        super().__init__(logger=logger)
-
-        self.guest = guest
-
-        self.command, self.options = self.prepare_command()
-
-    def prepare_command(self) -> tuple[Command, Command]:
-        """
-        Prepare installation command and subcommand options
-        """
-
-        raise NotImplementedError
-
-    def check_presence(self, *installables: Installable) -> ShellScript:
-        """
-        Return a presence status for each given installable
-        """
-
-        raise NotImplementedError
-
-    def install(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> ShellScript:
-        raise NotImplementedError
-
-    def reinstall(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> ShellScript:
-        raise NotImplementedError
-
-    def install_debuginfo(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> ShellScript:
-        raise NotImplementedError
-
-    def refresh_metadata(self) -> ShellScript:
-        raise NotImplementedError
-
-
-class PackageManager(tmt.utils.Common, Generic[PackageManagerEngineT]):
-    """
-    A base class for package manager plugins
-    """
+class PackageManager(tmt.utils.Common):
+    """ A base class for package manager plugins """
 
     NAME: str
-
-    _engine_class: type[PackageManagerEngineT]
-    engine: PackageManagerEngineT
-
-    #: If set, this package manager can be used for building derived
-    #: images under the hood of the ``bootc`` package manager.
-    bootc_builder: bool = False
 
     #: A command to run to check whether the package manager is available on
     #: a guest.
@@ -230,40 +152,37 @@ class PackageManager(tmt.utils.Common, Generic[PackageManagerEngineT]):
     #: may be installed togethers, and therefore a priority is needed.
     probe_priority: int = 0
 
+    command: Command
+    options: Command
+
     def __init__(self, *, guest: 'Guest', logger: tmt.log.Logger) -> None:
         super().__init__(logger=logger)
 
-        self.engine = self._engine_class(guest=guest, logger=logger)
-
         self.guest = guest
+        self.command, self.options = self.prepare_command()
+
+    def prepare_command(self) -> tuple[Command, Command]:
+        """ Prepare installation command and subcommand options """
+        raise NotImplementedError
 
     def check_presence(self, *installables: Installable) -> dict[Installable, bool]:
-        """
-        Return a presence status for each given installable
-        """
-
+        """ Return a presence status for each given installable """
         raise NotImplementedError
 
     def install(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> CommandOutput:
-        return self.guest.execute(self.engine.install(*installables, options=options))
+            self,
+            *installables: Installable,
+            options: Optional[Options] = None) -> CommandOutput:
+        raise NotImplementedError
 
     def reinstall(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> CommandOutput:
-        return self.guest.execute(self.engine.reinstall(*installables, options=options))
+            self,
+            *installables: Installable,
+            options: Optional[Options] = None) -> CommandOutput:
+        raise NotImplementedError
 
     def install_debuginfo(
-        self,
-        *installables: Installable,
-        options: Optional[Options] = None,
-    ) -> CommandOutput:
-        return self.guest.execute(self.engine.install_debuginfo(*installables, options=options))
-
-    def refresh_metadata(self) -> CommandOutput:
-        return self.guest.execute(self.engine.refresh_metadata())
+            self,
+            *installables: Installable,
+            options: Optional[Options] = None) -> CommandOutput:
+        raise NotImplementedError

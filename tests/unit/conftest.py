@@ -6,10 +6,8 @@ import _pytest.tmpdir
 import fmf
 import py.path
 import pytest
-from pytest_container.container import ContainerData
 
 from tmt.log import Logger
-from tmt.steps.provision.podman import GuestContainer, PodmanGuestData
 from tmt.utils import Path
 
 
@@ -56,7 +54,8 @@ try:
     from _pytest.tmpdir import tmp_path_factory  # noqa: F401
 
     @pytest.fixture(scope='session')
-    def tmppath_factory(tmp_path_factory: '_pytest.tmpdir.TempPathFactory') -> TempPathFactory:  # noqa: F811
+    def tmppath_factory(
+        tmp_path_factory: '_pytest.tmpdir.TempPathFactory') -> TempPathFactory:  # noqa: F811
         return TempPathFactory(tmp_path_factory)
 
     @pytest.fixture
@@ -72,8 +71,8 @@ except ImportError:
     # pytest, therefore things are safe.
     @pytest.fixture(scope='session')
     def tmppath_factory(
-        tmpdir_factory: '_pytest.tmpdir.TempdirFactory',  # type: ignore[name-defined]
-    ) -> TempPathFactory:
+            tmpdir_factory: '_pytest.tmpdir.TempdirFactory'  # type: ignore[name-defined]
+            ) -> TempPathFactory:
         return TempPathFactory(tmpdir_factory)
 
     @pytest.fixture
@@ -83,10 +82,7 @@ except ImportError:
 
 @pytest.fixture(scope='module')
 def source_dir(tmppath_factory: TempPathFactory) -> Path:
-    """
-    Create dummy directory structure and remove it after tests
-    """
-
+    """ Create dummy directory structure and remove it after tests """
     source_location = tmppath_factory.mktemp('source')
     (source_location / 'library').mkdir(parents=True)
     (source_location / 'lib_folder').mkdir()
@@ -100,10 +96,7 @@ def source_dir(tmppath_factory: TempPathFactory) -> Path:
 
 @pytest.fixture
 def target_dir(tmppath_factory: TempPathFactory) -> Path:
-    """
-    Return target directory path and clean up after tests
-    """
-
+    """ Return target directory path and clean up after tests """
     return tmppath_factory.mktemp('target')
 
 
@@ -117,29 +110,3 @@ def fixture_id_tree_defined() -> fmf.Tree:
 @pytest.fixture(name='id_tree_empty')
 def fixture_id_tree_empty() -> fmf.Tree:
     return fmf.Tree(Path(__file__).parent / 'id' / 'empty')
-
-
-@pytest.fixture(name='guest')
-def fixture_guest(container: ContainerData, root_logger: Logger) -> GuestContainer:
-    guest_data = PodmanGuestData(image=container.image_url_or_id, container=container.container_id)
-
-    guest = GuestContainer(logger=root_logger, data=guest_data, name='dummy-container')
-
-    guest.start()
-
-    return guest
-
-
-@pytest.fixture(name='guest_per_test')
-def fixture_guest_per_test(
-    container_per_test: ContainerData, root_logger: Logger
-) -> GuestContainer:
-    guest_data = PodmanGuestData(
-        image=container_per_test.image_url_or_id, container=container_per_test.container_id
-    )
-
-    guest = GuestContainer(logger=root_logger, data=guest_data, name='dummy-container')
-
-    guest.start()
-
-    return guest

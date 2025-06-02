@@ -70,7 +70,8 @@ example:
                 %post
                 systemctl disable firewalld
                 %end
-            metadata: "no_autopart harness=restraint"
+            metadata: |
+                "no-autopart harness=restraint"
             kernel-options: "ksdevice=eth1"
             kernel-options-post: "quiet"
 

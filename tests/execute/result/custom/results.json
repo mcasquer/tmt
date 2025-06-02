@@ -2,9 +2,7 @@
   {
     "name": "/test/passing",
     "result": "pass",
-    "note": [
-      "good result"
-    ],
+    "note": "good result",
     "log": [
       "pass_log"
     ],
@@ -30,9 +28,7 @@
       "another-id": "bar2"
     },
     "duration": "00:23:34",
-    "note": [
-      "fail result"
-    ],
+    "note": "fail result",
     "serial-number": 2,
     "guest": {
       "name": "client-1",

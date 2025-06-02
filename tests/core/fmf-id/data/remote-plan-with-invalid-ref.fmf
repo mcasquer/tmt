@@ -1,6 +1,3 @@
 plan:
     import:
-        url: https://github.com/teemtee/tmt.git
-        name: '.*'
-
         ref: 12345678

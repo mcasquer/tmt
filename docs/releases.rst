@@ -4,443 +4,16 @@
     Releases
 ======================
 
-tmt-1.50.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-It is now possible to use ``extra-*`` metadata keys in tests, plans
-and stories for arbitrary user-defined data, within the limits of
-what YAML allows. These keys are always ignored by ``tmt lint``.
-See the :ref:`/spec/core/extra` key specification for details and
-examples.
-
-Added ``--dry`` option for the :ref:`/plugins/provision/bootc` plugin.
-
-Added a specification for :ref:`policies </spec/policy>` that allow CI
-system and CI workflow maintainers to modify tests and plans to include
-mandatory checks and phases as required by their testing process.
-
-Initial implementation for the test-level policies has been added as
-well, aiming at CI workflows that need to enforce AVC checks across the
-whole component portfolio.
-
-The ``results.yaml`` file will now contain the log path for
-``journal.xml``.
-
-
-tmt-1.49.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The :ref:`import of remote plans</spec/plans/import>` support has
-been extended to allow import of multiple plans. New keys,
-``scope`` and ``importing``, allow users to control which plans to
-import and how to connect them with the importing plans.
-
-New :ref:`/plugins/prepare/feature` prepare plugin ``crb`` has
-been implemented which allows to easily enable or disable the
-CodeReady Builder repository on common test environments.
-
-The console log content is now available for guests provisioned by
-the :ref:`/plugins/provision/virtual.testcloud` plugin.
-
-Failures from tests and their checks were previously not fully
-saved or reported. Now, a separate ``failures.yaml`` file is
-created for each failed test and check, stored within their
-respective directories. When a failure occurs, the path to this
-file is included in the result logs. Check failures are now also
-being reported to ReportPortal.
-
-Output of the :ref:`/plugins/execute/tmt` and
-:ref:`/plugins/report/display` is changing in this release, to
-provide slightly more details, headers and timestamps. The
-``execute`` step now starts using ``display`` for its own progress
-reporting, providing the unified formatting and simplified code.
-
-When the login step was called in a separate command after the
-guest has been provisioned, the connection seemed to be stuck.
-This has been caused by the SSH master process not being
-terminated together with tmt, new tmt command would then spawn its
-own and conflict with the forgotten one. tmt no longer leaves the
-SSH master process running, preventing the issue.
-
-An issue in the :ref:`/plugins/provision/beaker` provision plugin
-prevented reconnecting to running guests. This has been fixed so
-now it's possible to fully work with existing tmt runs as well.
-
-A bug causing executed tests to remain in the ``pending`` state
-when the machine became unresponsive has been fixed. Tests will
-now correctly transition to the ``error`` state.
-
-
-tmt-1.48.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A new ``tmt about`` command has been introduced,
-initially providing information about the :ref:`tmt plugins <plugins>`.
-
-The :ref:`HTML report plugin </plugins/report/html>` now supports a
-new ``file`` key, allowing users to specify a custom output path for
-the generated HTML report.
-
-When using ``and``/``or`` groups in combination with
-:ref:`hardware requirements </spec/hardware>`, ``tmt`` will now emit
-a warning to alert users about potential ambiguity in how these
-constraints are applied.
-
-For users of the :ref:`testcloud provisioner </plugins/provision/virtual.testcloud>`,
-``PermitRootLogin`` is now enabled by default for Red Hat CoreOS (RHCOS)
-guests, simplifying access.
-
-An issue with saving remote :ref:`Ansible playbooks </plugins/prepare/ansible>`
-to the correct directory during provisioning and preparation has been fixed.
-
-The internal representation of an imported plan has been improved,
-though this should be largely transparent to users.
-
-Several internal improvements and updates to development tooling and
-CI processes have been made to enhance stability and maintainability.
-
-
-tmt-1.47.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-When ``tmt`` works with image mode, it now uses the native
-package installation method instead of ``rpm-ostree``.
-``tmt`` creates a ``Containerfile`` based on the booted image,
-adds the required packages, builds a new image, and reboots the
-system to use the updated image with the necessary packages.
-
-If applicable, the ``crb`` repository is now automatically enabled
-when enabling ``epel`` repository.
-
-If a mixture of local and remote plans is detected, ``tmt`` now
-prints a warning and skips the ``local`` plan.
-
-In the ``execute`` step, the documentation of the ``duration``
-option was enhanced to correctly describe the effect of the
-option.
-
-The ``execute`` plugin now explicitly requires ``awk`` to be
-installed on the machine, due to its recent removal from
-Fedora containers.
-
-The documentation of the ``feature`` plugins now includes a list
-of required Ansible modules.
-
-The documentation of plugins was improved to include examples
-of keys with actual values.
-
-The default unit of the ``memory`` hardware requirement is now
-``MiB``. It is used if no unit was specified.
-
-The steps documentation was deduplicated, and all information
-from the specs was moved to the ``plugins`` section.
-
-
-tmt-1.46.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The :ref:`/plugins/report/junit` report plugin now supports a new
-experimental ``subresults`` JUnit flavor. This flavor introduces
-support for tmt subresults and adjusts the hierarchy of
-``<testsuite>`` and ``<testcase>`` tags. With this flavor, test
-results are represented as ``<testsuite>`` tags, each containing a
-``<testcase>`` tag for the main result, along with additional
-``<testcase>`` tags for any subresults.
-
-As a tech preview, a new :ref:`/plugins/test-checks/coredump` check
-plugin has been added to detect system crashes using systemd-coredump
-during test execution. The plugin monitors for any segmentation
-faults and other crashes that produce core dumps. It can be configured
-to ignore specific crash patterns and crash details are saved for
-further investigation.
-
-When reporting results to ReportPortal, each test result can now
-directly link to a URL. To achieve this, a new key ``link-template``
-was added to the :ref:`/plugins/report/reportportal` plugin, which
-can be used to provide a template that will be rendered for each test
-result and appended to the end of its description. In cooperation with
-Testing Farm, this will allow ReportPortal test results to directly
-point to their respective artifacts.
-
-A new ``restraint-compatible`` key has been implemented for the
-:ref:`/plugins/execute/tmt` execute plugin which allows to enable
-and disable the :ref:`restraint-compatibility` features. For now
-it only affects whether the ``$OUTPUTFILE`` variable is respected
-or not. In the future this will allow users to enable/disable all
-restraint compatibility features. Please, update your plans with
-``restraint-compatibility: true`` as soon as possible if your
-tests depend on the restraint features.
-
-A new :ref:`system.management-controller</spec/hardware/system>`
-hardware property has been proposed to allow specifying the desired
-system management interface (e.g., IPMI) when provisioning hardware.
-While not yet implemented, this feature aims to support more precise
-hardware selection in the future.
-
-
-tmt-1.45.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-FIPS mode can now be enabled for RHEL or CentosStream 8, 9 or 10
-by a prepare step feature ``fips``. Moreover, the ``tmt try``
-command now supports the new :ref:`/stories/cli/try/option/fips`
-option backed by the :ref:`/plugins/prepare/feature` plugin.
-
-New option ``--build-disk-image-only`` is now supported by the
-:ref:`/plugins/provision/bootc` plugin and can be used for just
-building the disk image without actually provisioning the guest.
-
-When running ``tmt try``, failure in ``prepare`` phase drops the
-user to the menu to be able to login to the machine and possibly
-try it again.
-
-When working with an existing run which involved executing only a
-subset of plans, commands such as ``tmt run --last report`` will
-load the respective plans only instead of all available plans to
-save disk space and speed up the execution.
-
-Aborted tests and tests that failed when
-:ref:`/spec/plans/execute/exit-first` was enabled did not skip all
-remaining tests, only tests from the current ``discover`` phase.
-Plans with multiple ``discover`` phases would start ``execute``
-step for remaining ``discover`` phases. This is now fixed, aborted
-test and :ref:`/spec/plans/execute/exit-first` will skip **all**
-remaining tests.
-
-Added support for translating hardware constraints using a config
-file for the :ref:`/plugins/provision/beaker` provision plugin. It
-will try to get the config file, and find translations that would
-match the constraints. See
-:py:class:`tmt.config.models.hardware.MrackTranslation` for an
-example translation config.
-
-When pruning a repository with a specified ``path``, the
-``discover`` step now saves the data to the correct temporary
-directory and respects the structure of the original repository.
-This ensures that the test attributes have correct paths.
-
-The latest ``fmf`` package is now required to ensure that the
-``deployment-mode`` context :ref:`/spec/context/dimension` is
-fully supported.
-
-The default :ref:`/plugins/provision/ssh-options` used for
-connecting to provisioned guests are now documented.
-
-
-tmt-1.44.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``results.yaml`` file is now populated with test results
-right after the ``discover`` step is finished and the file is
-continuously updated during test execution to provide the latest
-results. This change also adds a new ``pending`` result outcome
-to the :ref:`/spec/results` specification for tests that were
-discovered but not yet executed.
-
-Execute tmt option ``--ignore-duration`` makes tmt to execute
-the test as long as it needs. Execute plugin doesn't need to be
-specified on the commandline for :ref:`plugin-variables` to work
-for this option.
-
-Add the ``--command`` option for the ``tmt run reboot`` so that
-users specify the command to run on guest to trigger the reboot.
-
-A new plan shaping plugin has been implemented to repeat a plan N times,
-demonstrating how one plan can be turned into many plans.
-
-The ``deployment-mode`` context dimension is now included in test run
-exports to Polarion.
-
-
-tmt-1.43.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Add the ``--workdir-root`` option for the ``tmt clean images``
-command so that users can specify the directory they want.
-
-A new ``upload-subresults`` key has been introduced for the
-:ref:`/plugins/report/reportportal` plugin, allowing the import of
-tmt subresults as child test items into ReportPortal. This
-behavior is optional and is disabled by default.
-
-Option ``tmt run --max N`` can split plan to multiple plans to
-include N tests at max.
-
-Test name is logged in kernel buffer before and after the
-:ref:`/plugins/test-checks/dmesg` check is executed.
-
-
-tmt-1.42.1
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``tmt show`` command now prints in verbose mode manual test
-instructions as well.
-
-A new context :ref:`/spec/context/dimension` ``deployment-mode``
-has been added to the specification. It can be used to
-:ref:`/spec/core/adjust` test and plan metadata for the
-``package`` or ``image`` mode context.
-
-The ``ansible-core`` package is now a recommended dependency package
-for tmt. It is used by plugins that use Ansible under the hood,
-:ref:`prepare/ansible</plugins/prepare/ansible>`,
-:ref:`finish/ansible</plugins/finish/ansible>`,
-and :ref:`prepare/feature</plugins/prepare/feature>`.
-
-A new core attribute :ref:`/spec/core/author` has been implemented
-for tracking the original author of the test, plan or story. In
-contrast to the :ref:`/spec/core/contact` key, this field is not
-supposed to be updated and can be useful when trying to track down
-the original author for consultation.
-
-The ``container`` executor now works in `Fedora Toolbx`__ when Podman is run
-using ``flatpak-spawn --host`` on the host system.
-
-__ https://docs.fedoraproject.org/en-US/fedora-silverblue/toolbox/
-
-Add support for running playbooks from Ansible collections specified
-using the ``namespace.collection.playbook`` notation.
-
-Added ``--dry`` option for the ``beaker`` provision plugin. When
-used it prints the Beaker Job XML without submitting it.
-
-:ref:`Results specification documentation</spec/results>` has now
-a dedicated place in the specification for improved discoverability.
-
-The ``rpm-ostree`` package installation now includes the
-``--assumeyes`` option for improved compatibility.
-
-Verbosity levels in ``tmt * show`` commands are now honored.
-
-Added new traceback verbosity level, ``TMT_SHOW_TRACEBACK=2``, which
-prints local variables in every frame, shorterning long values. See
-:ref:`command-variables` for details.
-
-Fixed an issue where ``execute`` step incorrectly attempted to run
-disabled ``discover`` phases.
-
-Pre-defined order values of :ref:`prepare phases</spec/plans/prepare>`
-were documented.
-
-
-tmt-1.41.1
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Fedora Rawhide transitioned files from ``/usr/sbin`` to
-``/usr/bin``, breaking path-based requirements installation for
-the AVC check. This update adjusts the check to rely on packages,
-restoring the functionality on Fedora Rawhide.
-
-
-tmt-1.41.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tests defined using the :ref:`/plugins/discover/shell` discover
-method are now executed in the exact order as listed in the config
-file. This fixes a problem which has been introduced in the recent
-``fmf`` update.
-
-The :ref:`/plugins/report/reportportal` plugin now exports all
-test contact information, rather than just the first contact
-instance.
-
-The :ref:`/plugins/provision/beaker` provision plugin gains
-support for submitting jobs on behalf of a group through the
-``beaker-job-group`` key. The submitting user must be a member of
-the given job group.
-
-The ``note`` field of tmt :ref:`/spec/results` changes from
-a string to a list of strings, to better accommodate multiple notes.
-
-The ``Node`` alias for the ``Core`` class has been dropped as it
-has been deprecated a long time ago.
-
-Previously when the test run was interrupted in the middle of the
-test execution the :ref:`/spec/plans/report` step would be skipped
-and no results would be reported. Now the report step is performed
-always so that users can access results of those tests which were
-successfully executed.
-
-The ``tmt try`` command now accepts the whole action word in
-addition to just a first letter, i.e. ``l`` and ``login`` now
-both work.
-
-
-tmt-1.40.0
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The execution of individual step configurations can be controlled
-using the new :ref:`when<when-config>` key. Enable and disable
-selected step phase easily with the same syntax as used for the
-context :ref:`/spec/core/adjust` rules.
-
-When the ``login`` command is used to enter an interactive session
-on the guest, for example during a ``tmt try`` session, the
-current working directory is set to the path of the last executed
-test, so that users can easily investigate the test code there and
-experiment with it directly on the guest.
-
-A new ``--workdir-root`` option is now supported in the ``tmt
-clean`` and ``tmt run`` commands so that users can specify the
-directory which should be cleaned up and where new test runs
-should be stored.
-
-New ``--keep`` option has been implemented for the ``tmt clean
-guests`` and ``tmt clean`` commands. Users can now choose to keep
-the selected number of latest guests, and maybe also runs, clean
-the rest to release the resources.
-
-The log file paths of tmt subresults created by shell tests by
-calling the ``tmt-report-result`` or by calling beakerlib's
-``rlPhaseEnd`` saved in ``results.yaml`` are now relative to the
-``execute`` directory.
-
-The :ref:`/plugins/report/reportportal` plugin now handles the
-timestamps for ``custom`` and ``restraint`` results correctly. It
-should prevent the ``start-time`` of a result being higher than
-the ``end-time``. It should be also ensured that the end time of
-all launch items is the same or higher than the start time of a
-parent item/launch.
-
-The :ref:`/plugins/provision/beaker` provision plugin gained
-support for adding public keys to the guest instance by populating
-the kickstart file.
-
-Documentation pages now use the `new tmt logo`__ designed by Maria
-Leonova.
-
-__ https://github.com/teemtee/docs/tree/main/logo
-
 
 tmt-1.39.0
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The :ref:`/plugins/provision/beaker` provision plugin gains
-support for :ref:`system.model-name</spec/hardware/system>`,
-:ref:`system.vendor-name</spec/hardware/system>`,
-:ref:`cpu.family</spec/hardware/system>` and
-:ref:`cpu.frequency</spec/hardware/cpu>` hardware requirements.
+support for :ref:`system.model-name</spec/hardware/system>` and
+:ref:`system.vendor-name</spec/hardware/system>` hardware requirements.
 
 The ``tmt lint`` command now reports a failure if empty
 environment files are found.
-
-The ``tmt try`` command now supports the new
-:ref:`/stories/cli/try/option/arch` option.
-
-As a tech preview, a new :ref:`/plugins/provision/bootc` provision
-plugin has been implemented. It takes a container image as input,
-builds a bootc disk image from the container image, then uses the
-:ref:`/plugins/provision/virtual.testcloud` plugin to create a
-virtual machine using the bootc disk image.
-
-The ``tmt reportportal`` plugin has newly introduced size limit
-for logs uploaded to ReportPortal because large logs decreases
-ReportPortal UI usability. Default limit are 1 MB for a test
-output and 50 kB for a traceback (error log).
-Limits can be controlled using the newly introduced
-``reportportal`` plugin options ``--log-size-limit`` and
-``--traceback-size-limit`` or the respective environment
-variables.
 
 
 tmt-1.38.0
@@ -576,7 +149,7 @@ committish reference, either branch, tag, git-describe, or if all
 fails the commit hash.  You may encounter this in the verbose log
 of ``tmt tests show`` or plan/test imports.
 
-:ref:`Result specification</spec/results>` now defines
+:ref:`Result specification</spec/plans/results>` now defines
 ``original-result`` key holding the original outcome of a test,
 subtest or test checks. The effective outcome, stored in
 ``result`` key, is computed from the original outcome, and it is
@@ -606,7 +179,7 @@ tmt-1.36.0
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 tmt will now emit a warning when :ref:`custom test results</spec/tests/result>`
-file does not follow the :ref:`result specification</spec/results>`.
+file does not follow the :ref:`result specification</spec/plans/results>`.
 
 We have started to use ``warnings.deprecated`` to advertise upcoming
 API deprecations.
@@ -867,7 +440,7 @@ changes. ``info`` results are now treated as ``pass`` results, and
 would be counted towards the successful exit code, ``0``, instead
 of the exit code ``2`` in older releases.
 
-The :ref:`/plugins/report/polarion` report now supports the
+The :ref:`/spec/plans/report/polarion` report now supports the
 ``fips`` field to store information about whether the FIPS mode
 was enabled or disabled on the guest during the test execution.
 
@@ -916,7 +489,7 @@ option which allows to use a user account and execute
 ``prepare``, ``execute`` and ``finish`` steps using ``sudo -E``
 when necessary.
 
-The :ref:`/plugins/report/html` report plugin now shows
+The :ref:`/spec/plans/report/html` report plugin now shows
 :ref:`/spec/tests/check` results so that it's possible to inspect
 detected AVC denials directly from the report.
 
@@ -933,7 +506,7 @@ can be used to update step phase fields only when not set in the
 ``fmf`` files. In this way it's possible to easily fill the gaps
 in the plans, for example provide the default distro image.
 
-The :ref:`/plugins/report/html` report plugin now shows
+The :ref:`/spec/plans/report/html` report plugin now shows
 provided :ref:`/spec/plans/context` and link to the test ``data``
 directory so that additional logs can be easily checked.
 
@@ -941,7 +514,7 @@ The **avc** :ref:`/spec/tests/check` allows to detect avc denials
 which appear during the test execution.
 
 A new ``skip`` custom result outcome has been added to the
-:ref:`/spec/results` specification.
+:ref:`/spec/plans/results` specification.
 
 All context :ref:`/spec/context/dimension` values are now handled
 in a case insensitive way.

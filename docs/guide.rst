@@ -19,8 +19,7 @@ The First Steps
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Installing the main package with the core functionality is quite
-straightforward. No worry, the :ref:`/stories/install/minimal`
-package has just a few dependencies:
+straightforward. No worry, there are just a few dependencies:
 
 .. code-block:: shell
 
@@ -86,8 +85,8 @@ dependencies here:
     tmt run -a provision -h virtual
 
 Don't care about the disk space? Simply install ``tmt+all`` and
-you'll get :ref:`/stories/install/all` available functionality at
-hand. Check the help to list all supported provision methods:
+you'll get all available functionality at hand. Check the help to
+list all supported provision methods:
 
 .. code-block:: shell
 
@@ -193,9 +192,9 @@ Note that each of the steps above uses the ``how`` keyword to
 choose the desired method which should be applied. Steps can
 provide multiple implementations which enables you to choose the
 best one for your use case. For example to prepare the guest it's
-possible to use the :ref:`/plugins/prepare/install` method for
-simple package installations, :ref:`/plugins/prepare/ansible`
-for more complex system setup or :ref:`/plugins/prepare/shell`
+possible to use the :ref:`/spec/plans/prepare/install` method for
+simple package installations, :ref:`/spec/plans/prepare/ansible`
+for more complex system setup or :ref:`/spec/plans/prepare/shell`
 for arbitrary shell commands.
 
 
@@ -776,7 +775,47 @@ locations without any change to the resulting `fmf` tree:
 This gives you a nice flexibility to extend the metadata when and
 where needed as your project organically grows.
 
-.. include:: guide/efficient-metadata.inc.rst
+
+Efficient Metadata Handling
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tmt`` offers several features to help you manage your test metadata efficiently, reducing duplication and making it easier to maintain large test suites. This section highlights some of these key features.
+
+Minimize Duplication
+--------------------
+
+Leverage the following features to avoid repetition in your metadata:
+
+*   **Inheritance**: The Flexible Metadata Format (fmf) allows metadata to be inherited from parent directories. This is a powerful way to define common attributes at a higher level, which are then automatically picked up by tests and plans in subdirectories. For a detailed explanation, see the :ref:`inheritance` section.
+
+*   **YAML Anchors and Aliases**: For repetition within a single YAML file, you can use `YAML anchors and aliases <anchors-aliases_>`_. This allows you to define a chunk of YAML once and reuse it multiple times within the same file. Learn more about this in the :ref:`anchors-aliases` section.
+
+Adapt to Context
+----------------
+
+*   **Adjust**: The :ref:`/spec/core/adjust` attribute provides a flexible way to modify metadata based on the current context (e.g., different distributions, architectures, or environments). This allows you to tailor tests and plans without duplicating the entire metadata structure. For example, you can adjust test requirements or enable/disable tests based on specific conditions.
+
+Share Tests Across Repositories
+-------------------------------
+
+``tmt`` allows you to discover and execute tests that reside in different Git repositories. This is particularly useful for sharing common test libraries or when tests are maintained by different teams.
+
+To include tests from an external repository, specify the ``url`` and optionally a ``ref`` (branch, tag, or commit) in the ``discover`` step of your plan:
+
+.. code-block:: yaml
+
+    discover:
+      how: fmf
+      url: https://github.com/teemtee/tmt.git
+      ref: main
+      # You can also specify a path within the repository
+      # path: /tests/core
+
+This will clone the specified repository and discover tests according to the fmf metadata found there. This enables modular test organization and promotes reusability of test code across projects. You can also use local paths to other repositories if they are available on the same filesystem.
+For general information on configuring test discovery, see :ref:`/spec/plans/discover`.
+
+By utilizing these features, you can create a more maintainable, scalable, and efficient test metadata structure.
+
 
 .. _link-issues:
 
@@ -875,40 +914,6 @@ copied to the guest.
     ``finish`` steps yet.
 
 
-.. _when-config:
-
-Conditional step configuration
-------------------------------
-
-.. versionadded:: 1.40
-
-Sometimes, the plan is expected to cover a broad set of environments;
-however, some step configurations may not be applicable everywhere.
-While :ref:`/spec/core/adjust` can be used to construct the plan
-in this way, it soon becomes difficult to read.
-
-Using the ``when`` key makes it easier to restrict a step configuration
-to run only if any of the specified rules matches.
-The syntax is the same as in ``adjust`` and :ref:`/spec/context`.
-
-.. code-block:: yaml
-
-    prepare:
-      - name: Prepare config to run only on Fedora
-        when: distro == fedora
-        how: shell
-        script: ./fedora_specific.sh
-      - name: Runs always
-        how: shell
-        script: ./setup.sh
-      - name: More rules in 'when' key
-        how: shell
-        script: ./something.sh
-        when:
-        - arch != x86_64
-        - initiator == human && distro == fedora
-
-
 .. _multihost-testing:
 
 Multihost Testing
@@ -973,7 +978,7 @@ to their services, synchronization, etc.
 
 tmt fully supports one test being executed multiple times. This is
 especially visible in the format of results, see
-:ref:`/spec/results`. Every test is assigned a "serial
+:ref:`/spec/plans/results`. Every test is assigned a "serial
 number", if the same test appears in multiple discover phases, each
 instance would be given a different serial number. The serial number
 and the guest from which a result comes from are then saved for each

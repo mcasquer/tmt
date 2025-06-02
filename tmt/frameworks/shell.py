@@ -1,41 +1,31 @@
-import re
 from typing import Optional
 
+import tmt.base
 import tmt.log
 import tmt.result
 import tmt.steps.execute
 import tmt.utils
 from tmt.frameworks import TestFramework, provides_framework
-from tmt.result import ResultOutcome, save_failures
+from tmt.result import ResultOutcome
 from tmt.steps.execute import TEST_OUTPUT_FILENAME, TestInvocation
-from tmt.utils import Path
-
-
-def _extract_failures(invocation: 'TestInvocation', log_path: Path) -> list[str]:
-    try:
-        log = invocation.phase.step.plan.execute.read(log_path)
-    except tmt.utils.FileError:
-        return []
-
-    return re.findall(r'.*\b(?:error|fail)\b.*', log, re.IGNORECASE | re.MULTILINE)
 
 
 @provides_framework('shell')
 class Shell(TestFramework):
     @classmethod
     def get_test_command(
-        cls, invocation: 'TestInvocation', logger: tmt.log.Logger
-    ) -> tmt.utils.ShellScript:
+            cls,
+            invocation: 'TestInvocation',
+            logger: tmt.log.Logger) -> tmt.utils.ShellScript:
+
         # Use default options for shell tests
         return tmt.utils.ShellScript(f"{tmt.utils.SHELL_OPTIONS}; {invocation.test.test}")
 
     @classmethod
     def _process_results_reduce(
-        cls,
-        invocation: TestInvocation,
-        results: list['tmt.result.RawResult'],
-        logger: tmt.log.Logger,
-    ) -> list['tmt.result.Result']:
+            cls,
+            invocation: TestInvocation,
+            results: list['tmt.result.RawResult']) -> list['tmt.result.Result']:
         """
         Reduce given results to one outcome.
 
@@ -69,8 +59,7 @@ class Shell(TestFramework):
                 ResultOutcome.SKIP,
                 ResultOutcome.PASS,
                 ResultOutcome.WARN,
-                ResultOutcome.FAIL,
-            ]
+                ResultOutcome.FAIL]
 
             outcome_indices = [hierarchy.index(outcome) for outcome in outcomes]
             actual_outcome = original_outcome = hierarchy[max(outcome_indices)]
@@ -92,30 +81,19 @@ class Shell(TestFramework):
 
                 break
 
-        failures: list[str] = []
-        for test_log in test_logs:
-            failures += _extract_failures(invocation, test_log)
-
-        # Save failures to the file
-        test_logs.append(save_failures(invocation, invocation.test_data_path, failures))
-
-        return [
-            tmt.Result.from_test_invocation(
-                invocation=invocation,
-                result=actual_outcome,
-                log=test_logs,
-                note=[note] if note else [],
-                subresult=[result.to_subresult() for result in results],
-            )
-        ]
+        return [tmt.Result.from_test_invocation(
+            invocation=invocation,
+            result=actual_outcome,
+            log=test_logs,
+            note=note,
+            subresult=[result.to_subresult() for result in results])]
 
     @classmethod
     def extract_results(
-        cls,
-        invocation: 'TestInvocation',
-        results: list[tmt.result.Result],
-        logger: tmt.log.Logger,
-    ) -> list[tmt.result.Result]:
+            cls,
+            invocation: 'TestInvocation',
+            results: list[tmt.result.Result],
+            logger: tmt.log.Logger) -> list[tmt.result.Result]:
         """
         Check result of a shell test.
 
@@ -130,12 +108,12 @@ class Shell(TestFramework):
         :returns: list of results.
         """
         assert invocation.return_code is not None
-        note: list[str] = []
+        note = None
 
         # Handle the `tmt-report-result` command results as a single test with assigned tmt
         # subresults.
         if results:
-            return cls._process_results_reduce(invocation, results, logger)
+            return cls._process_results_reduce(invocation, results)
 
         # If no extra results were passed (e.g. `tmt-report-result` was not called during the
         # test), just process the exit code of a shell test and return the result.
@@ -146,23 +124,14 @@ class Shell(TestFramework):
             result = ResultOutcome.ERROR
             # Add note about the exceeded duration
             if invocation.return_code == tmt.utils.ProcessExitCodes.TIMEOUT:
-                note.append('timeout')
+                note = 'timeout'
                 invocation.phase.timeout_hint(invocation)
 
             elif tmt.utils.ProcessExitCodes.is_pidfile(invocation.return_code):
-                note.append('pidfile locking')
+                note = 'pidfile locking'
 
-        log_path = invocation.relative_path / tmt.steps.execute.TEST_OUTPUT_FILENAME
-        paths = [
-            log_path,
-            save_failures(invocation, invocation.path, _extract_failures(invocation, log_path)),
-        ]
-
-        return [
-            tmt.Result.from_test_invocation(
-                invocation=invocation,
-                result=result,
-                log=paths,
-                note=note,
-            )
-        ]
+        return [tmt.Result.from_test_invocation(
+            invocation=invocation,
+            result=result,
+            log=[invocation.relative_path / tmt.steps.execute.TEST_OUTPUT_FILENAME],
+            note=note)]

@@ -1,5 +1,0 @@
-summary: Common feature to enable/disable CRB
-description: Make sure enable/disable CRB works.
-tag+:
-  - provision-container
-  - provision-only

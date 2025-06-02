@@ -7,7 +7,6 @@ import textwrap
 from typing import Any
 
 import tmt.checks
-import tmt.container
 import tmt.log
 import tmt.plugins
 import tmt.steps
@@ -15,21 +14,17 @@ import tmt.steps.discover
 import tmt.steps.execute
 import tmt.steps.finish
 import tmt.steps.prepare
-import tmt.steps.prepare.feature
 import tmt.steps.provision
 import tmt.steps.report
 import tmt.utils
-import tmt.utils.hints
-from tmt.container import ContainerClass
-from tmt.utils import Path
+from tmt.utils import ContainerClass, Path
 from tmt.utils.templates import render_template_file
 
 REVIEWED_PLUGINS: tuple[str, ...] = (
     'prepare/ansible',
     'test-checks/avc',
-    'test-checks/dmesg',
-    'test-checks/watchdog',
-)
+    'test-checks/dmesg'
+    )
 
 
 HELP = textwrap.dedent("""
@@ -40,13 +35,10 @@ Generate pages for step plugins sources.
 
 
 def _is_ignored(
-    container: ContainerClass,
-    field: dataclasses.Field[Any],
-    metadata: tmt.container.FieldMetadata,
-) -> bool:
-    """
-    Check whether a given field is to be ignored in documentation
-    """
+        container: ContainerClass,
+        field: dataclasses.Field[Any],
+        metadata: tmt.utils.FieldMetadata) -> bool:
+    """ Check whether a given field is to be ignored in documentation """
 
     if field.name in ('how', '_OPTIONLESS_FIELDS'):
         return True
@@ -58,28 +50,23 @@ def _is_ignored(
 
 
 def _is_inherited(
-    container: ContainerClass,
-    field: dataclasses.Field[Any],
-    metadata: tmt.container.FieldMetadata,
-) -> bool:
-    """
-    Check whether a given field is inherited from step data base class
-    """
+        container: ContainerClass,
+        field: dataclasses.Field[Any],
+        metadata: tmt.utils.FieldMetadata) -> bool:
+    """ Check whether a given field is inherited from step data base class """
 
     # TODO: for now, it's a list, but inspecting the actual tree of classes
     # would be more generic. It's good enough for now.
-    return field.name in ('name', 'where', 'when', 'order', 'summary', 'enabled', 'result')
+    return field.name in ('name', 'where', 'order', 'summary', 'enabled', 'result')
 
 
 def container_ignored_fields(container: ContainerClass) -> list[str]:
-    """
-    Collect container field names that are never displayed
-    """
+    """ Collect container field names that are never displayed """
 
     field_names: list[str] = []
 
-    for field in tmt.container.container_fields(container):
-        _, _, _, _, metadata = tmt.container.container_field(container, field.name)
+    for field in tmt.utils.container_fields(container):
+        _, _, _, _, metadata = tmt.utils.container_field(container, field.name)
 
         if _is_ignored(container, field, metadata):
             field_names.append(field.name)
@@ -88,14 +75,12 @@ def container_ignored_fields(container: ContainerClass) -> list[str]:
 
 
 def container_inherited_fields(container: ContainerClass) -> list[str]:
-    """
-    Collect container field names that are inherited from step data base class
-    """
+    """ Collect container field names that are inherited from step data base class """
 
     field_names: list[str] = []
 
-    for field in tmt.container.container_fields(container):
-        _, _, _, _, metadata = tmt.container.container_field(container, field.name)
+    for field in tmt.utils.container_fields(container):
+        _, _, _, _, metadata = tmt.utils.container_field(container, field.name)
 
         if _is_inherited(container, field, metadata):
             field_names.append(field.name)
@@ -104,14 +89,12 @@ def container_inherited_fields(container: ContainerClass) -> list[str]:
 
 
 def container_intrinsic_fields(container: ContainerClass) -> list[str]:
-    """
-    Collect container fields specific for the given step data
-    """
+    """ Collect container fields specific for the given step data """
 
     field_names: list[str] = []
 
-    for field in tmt.container.container_fields(container):
-        _, _, _, _, metadata = tmt.container.container_field(container, field.name)
+    for field in tmt.utils.container_fields(container):
+        _, _, _, _, metadata = tmt.utils.container_field(container, field.name)
 
         if _is_ignored(container, field, metadata):
             continue
@@ -125,39 +108,17 @@ def container_intrinsic_fields(container: ContainerClass) -> list[str]:
 
 
 def is_enum(value: Any) -> bool:
-    """
-    Find out whether a given value is an enum member
-    """
+    """ Find out whether a given value is an enum member """
 
     return isinstance(value, enum.Enum)
 
 
 def _create_step_plugin_iterator(registry: tmt.plugins.PluginRegistry[tmt.steps.Method]):
-    """
-    Create iterator over plugins of a given registry
-    """
+    """ Create iterator over plugins of a given registry """
 
     def plugin_iterator():
-        for plugin_id in sorted(registry.iter_plugin_ids()):
+        for plugin_id in registry.iter_plugin_ids():
             plugin = registry.get_plugin(plugin_id).class_
-
-            if hasattr(plugin, 'get_data_class'):
-                yield plugin_id, plugin, plugin.get_data_class()
-
-            else:
-                yield plugin_id, plugin, plugin._data_class
-
-    return plugin_iterator
-
-
-def _create_feature_plugin_iterator(
-    registry: tmt.plugins.PluginRegistry[tmt.steps.prepare.feature.FeatureClass],
-):
-    """Create iterator over plugins of a feature plugin registry"""
-
-    def plugin_iterator():
-        for plugin_id in sorted(registry.iter_plugin_ids()):
-            plugin = registry.get_plugin(plugin_id)
 
             yield plugin_id, plugin, plugin._data_class
 
@@ -165,12 +126,10 @@ def _create_feature_plugin_iterator(
 
 
 def _create_test_check_plugin_iterator(registry: tmt.plugins.PluginRegistry[tmt.steps.Method]):
-    """
-    Create iterator over plugins of a test check registry
-    """
+    """ Create iterator over plugins of a test check registry """
 
     def plugin_iterator():
-        for plugin_id in sorted(registry.iter_plugin_ids()):
+        for plugin_id in registry.iter_plugin_ids():
             plugin = registry.get_plugin(plugin_id)
 
             yield plugin_id, plugin, plugin._check_class
@@ -197,38 +156,27 @@ def main() -> None:
 
     if step_name == 'discover':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.discover.DiscoverPlugin._supported_methods
-        )
+            tmt.steps.discover.DiscoverPlugin._supported_methods)
 
     elif step_name == 'execute':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.execute.ExecutePlugin._supported_methods
-        )
+            tmt.steps.execute.ExecutePlugin._supported_methods)
 
     elif step_name == 'finish':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.finish.FinishPlugin._supported_methods
-        )
+            tmt.steps.finish.FinishPlugin._supported_methods)
 
     elif step_name == 'prepare':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.prepare.PreparePlugin._supported_methods
-        )
+            tmt.steps.prepare.PreparePlugin._supported_methods)
 
     elif step_name == 'provision':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.provision.ProvisionPlugin._supported_methods
-        )
+            tmt.steps.provision.ProvisionPlugin._supported_methods)
 
     elif step_name == 'report':
         plugin_generator = _create_step_plugin_iterator(
-            tmt.steps.report.ReportPlugin._supported_methods
-        )
-
-    elif step_name == 'prepare-feature':
-        plugin_generator = _create_feature_plugin_iterator(
-            tmt.steps.prepare.feature._FEATURE_PLUGIN_REGISTRY
-        )
+            tmt.steps.report.ReportPlugin._supported_methods)
 
     elif step_name == 'test-checks':
         plugin_generator = _create_test_check_plugin_iterator(tmt.checks._CHECK_PLUGIN_REGISTRY)
@@ -237,22 +185,18 @@ def main() -> None:
         raise tmt.utils.GeneralError(f"Unhandled step name '{step_name}'.")
 
     # ... and render the template.
-    output_filepath.write_text(
-        render_template_file(
-            template_filepath,
-            LOGGER=logger,
-            STEP=step_name,
-            PLUGINS=plugin_generator,
-            REVIEWED_PLUGINS=REVIEWED_PLUGINS,
-            HINTS=tmt.utils.hints.HINTS,
-            is_enum=is_enum,
-            container_fields=tmt.container.container_fields,
-            container_field=tmt.container.container_field,
-            container_ignored_fields=container_ignored_fields,
-            container_inherited_fields=container_inherited_fields,
-            container_intrinsic_fields=container_intrinsic_fields,
-        )
-    )
+    output_filepath.write_text(render_template_file(
+        template_filepath,
+        LOGGER=logger,
+        STEP=step_name,
+        PLUGINS=plugin_generator,
+        REVIEWED_PLUGINS=REVIEWED_PLUGINS,
+        is_enum=is_enum,
+        container_fields=tmt.utils.container_fields,
+        container_field=tmt.utils.container_field,
+        container_ignored_fields=container_ignored_fields,
+        container_inherited_fields=container_inherited_fields,
+        container_intrinsic_fields=container_intrinsic_fields))
 
 
 if __name__ == '__main__':

@@ -3,13 +3,12 @@
 
 rlJournalStart
     rlPhaseStartSetup
-        # use `/var/tmp` to persist the run dir during reboots, because `bootc` package manager used
-        rlRun "run=\$(mktemp -d -p /var/tmp)" 0 "Create run directory"
+        rlRun "run=\$(mktemp -d)" 0 "Create run directory"
         rlRun "pushd data"
     rlPhaseEnd
 
     rlPhaseStartTest
-        if ! rlRun "TMT_SHOW_TRACEBACK=full tmt run -vvvvdddd --id $run"; then
+        if ! rlRun "tmt run -vvv --id $run"; then
             rlFileSubmit $run/log.txt
         fi
     rlPhaseEnd

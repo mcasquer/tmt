@@ -3,4 +3,4 @@ provision:
     image: $IMAGE
 execute:
     how: tmt
-    script: ./test.sh
+    script: ls $PATHS

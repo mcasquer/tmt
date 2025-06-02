@@ -13,9 +13,8 @@ if TYPE_CHECKING:
 TestFrameworkClass = type['TestFramework']
 
 
-_FRAMEWORK_PLUGIN_REGISTRY: tmt.plugins.PluginRegistry[TestFrameworkClass] = (
-    tmt.plugins.PluginRegistry('test.framework')
-)
+_FRAMEWORK_PLUGIN_REGISTRY: tmt.plugins.PluginRegistry[TestFrameworkClass] = \
+    tmt.plugins.PluginRegistry()
 
 
 def provides_framework(framework: str) -> Callable[[TestFrameworkClass], TestFrameworkClass]:
@@ -29,8 +28,7 @@ def provides_framework(framework: str) -> Callable[[TestFrameworkClass], TestFra
         _FRAMEWORK_PLUGIN_REGISTRY.register_plugin(
             plugin_id=framework,
             plugin=framework_cls,
-            logger=tmt.log.Logger.get_bootstrap_logger(),
-        )
+            logger=tmt.log.Logger.get_bootstrap_logger())
 
         return framework_cls
 
@@ -47,10 +45,9 @@ class TestFramework:
 
     @classmethod
     def get_requirements(
-        cls,
-        test: 'Test',
-        logger: tmt.log.Logger,
-    ) -> list['DependencySimple']:
+            cls,
+            test: 'Test',
+            logger: tmt.log.Logger) -> list['DependencySimple']:
         """
         Provide additional test requirements needed by its framework.
 
@@ -63,10 +60,9 @@ class TestFramework:
 
     @classmethod
     def get_environment_variables(
-        cls,
-        invocation: 'TestInvocation',
-        logger: tmt.log.Logger,
-    ) -> tmt.utils.Environment:
+            cls,
+            invocation: 'TestInvocation',
+            logger: tmt.log.Logger) -> tmt.utils.Environment:
         """
         Provide additional environment variables for the test.
 
@@ -81,10 +77,9 @@ class TestFramework:
 
     @classmethod
     def get_test_command(
-        cls,
-        invocation: 'TestInvocation',
-        logger: tmt.log.Logger,
-    ) -> tmt.utils.ShellScript:
+            cls,
+            invocation: 'TestInvocation',
+            logger: tmt.log.Logger) -> tmt.utils.ShellScript:
         """
         Provide a test command.
 
@@ -99,10 +94,9 @@ class TestFramework:
 
     @classmethod
     def get_pull_options(
-        cls,
-        invocation: 'TestInvocation',
-        logger: tmt.log.Logger,
-    ) -> list[str]:
+            cls,
+            invocation: 'TestInvocation',
+            logger: tmt.log.Logger) -> list[str]:
         """
         Provide additional options for pulling test data directory.
 
@@ -116,11 +110,10 @@ class TestFramework:
 
     @classmethod
     def extract_results(
-        cls,
-        invocation: 'TestInvocation',
-        results: list[tmt.result.Result],
-        logger: tmt.log.Logger,
-    ) -> list[tmt.result.Result]:
+            cls,
+            invocation: 'TestInvocation',
+            results: list[tmt.result.Result],
+            logger: tmt.log.Logger) -> list[tmt.result.Result]:
         """
         Extract test results.
 

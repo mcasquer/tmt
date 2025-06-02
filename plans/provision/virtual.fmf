@@ -24,15 +24,13 @@ prepare+:
         sudo systemctl start libvirtd
         sudo systemctl status libvirtd
 
-
-# TODO hotfix disable the image preparation because of weird dns issues
-#  - name: prepare-image
-#    summary: Fetch the image, refresh dnf cache, install beakerlib
-#    script: |
-#        tmt run --remove plan --default provision --how virtual finish
-#        for image in /var/tmp/tmt/testcloud/images/*qcow2; do
-#            virt-customize --add $image --run-command 'dnf --refresh install -y beakerlib'
-#        done
+  - name: prepare-image
+    summary: Fetch the image, refresh dnf cache, install beakerlib
+    script: |
+        tmt run --remove plan --default provision --how virtual finish
+        for image in /var/tmp/tmt/testcloud/images/*qcow2; do
+            virt-customize --add $image --run-command 'dnf --refresh install -y beakerlib'
+        done
 
 context+:
   provision_how: virtual
@@ -48,7 +46,7 @@ adjust+:
         hardware:
             virtualization:
                 is-supported: true
-            memory: ">= 8 GB"
+            memory: ">= 4 GB"
     when: trigger == commit
 
   - prepare+:

@@ -47,7 +47,7 @@ rlJournalStart
         fi
 
         rlRun "package_cache=\$(mktemp -d)" 0 "Create cache directory for downloaded packages"
-        rlRun "run=\$(mktemp -d -p /var/tmp)" 0 "Create run directory"
+        rlRun "run=\$(mktemp -d)" 0 "Create run directory"
         rlRun "pushd data"
 
         rlRun "export TMT_BOOT_TIMEOUT=300"
@@ -72,12 +72,12 @@ rlJournalStart
                 rlRun "distro=fedora-40"
                 rlRun "package_manager=dnf"
 
-            elif is_centos_stream_9 "$image"; then
-                rlRun "distro=centos-stream-9"
+            elif is_fedora_39 "$image"; then
+                rlRun "distro=fedora-39"
                 rlRun "package_manager=dnf"
 
-            elif is_centos_stream_10 "$image"; then
-                rlRun "distro=centos-stream-10"
+            elif is_centos_stream_9 "$image"; then
+                rlRun "distro=centos-stream-9"
                 rlRun "package_manager=dnf"
 
             elif is_centos_7 "$image"; then
@@ -96,14 +96,7 @@ rlJournalStart
                 rlRun "distro=fedora-coreos"
 
                 if is_ostree "$image"; then
-
-                    if [ "$PROVISION_HOW" = "virtual" ]; then
-                      rlRun "package_manager=bootc"
-
-                    else
-                      rlRun "package_manager=rpm-ostree"
-
-                    fi
+                    rlRun "package_manager=rpm-ostree"
 
                 elif [ "$PROVISION_HOW" = "virtual" ]; then
                     rlRun "package_manager=dnf"
@@ -161,7 +154,7 @@ rlJournalStart
             fi
         rlPhaseEnd
 
-        if [ "$PROVISION_HOW" = "container" ] && rlIsFedora 41 && is_fedora_41 "$image"; then
+        if rlIsFedora 39 && is_fedora_39 "$image"; then
             rlPhaseStartTest "$phase_prefix Install downloaded packages from current directory (plan)"
                 fetch_downloaded_packages "$image"
 
@@ -232,11 +225,7 @@ rlJournalStart
                 rlAssertGrep "out: no package provides tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_ostree "$image"; then
-                if [ "$PROVISION_HOW" = "virtual" ]; then
-                    rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
-                else
-                    rlAssertGrep "err: error: Packages not found: tree-but-spelled-wrong" $rlRun_LOG
-                fi
+                rlAssertGrep "err: error: Packages not found: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_fedora_coreos "$image"; then
                 rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
@@ -248,6 +237,9 @@ rlJournalStart
                 rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_fedora_40 "$image"; then
+                rlAssertGrep "err: Error: Unable to find a match: tree-but-spelled-wrong" $rlRun_LOG
+
+            elif is_fedora_39 "$image"; then
                 rlAssertGrep "err: Error: Unable to find a match: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_ubuntu "$image" || is_debian "$image"; then
@@ -270,11 +262,7 @@ rlJournalStart
                 rlAssertGrep "out: no package provides tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_ostree "$image"; then
-                if [ "$PROVISION_HOW" = "virtual" ]; then
-                    rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
-                else
-                    rlAssertGrep "err: error: Packages not found: tree-but-spelled-wrong" $rlRun_LOG
-                fi
+                rlAssertGrep "err: error: Packages not found: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_fedora_coreos "$image"; then
                 rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
@@ -286,6 +274,9 @@ rlJournalStart
                 rlAssertGrep "err: No match for argument: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_fedora_40 "$image"; then
+                rlAssertGrep "err: Error: Unable to find a match: tree-but-spelled-wrong" $rlRun_LOG
+
+            elif is_fedora_39 "$image"; then
                 rlAssertGrep "err: Error: Unable to find a match: tree-but-spelled-wrong" $rlRun_LOG
 
             elif is_ubuntu "$image" || is_debian "$image"; then
@@ -302,7 +293,7 @@ rlJournalStart
         # TODO: at least copr is RH-specific, but package name escaping and debuginfo should be
         # possible to extend to other distros.
         if (is_fedora "$image" && ! is_fedora_coreos "$image") || is_centos "$image" || is_ubi "$image"; then
-            if ! is_centos_7 "$image" && ! is_ubi_8 "$image"; then
+            if ! is_centos_7 "$image"; then
                 rlPhaseStartTest "$phase_prefix Just enable copr"
                     rlRun "$tmt execute plan --name copr"
                 rlPhaseEnd

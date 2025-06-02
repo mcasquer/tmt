@@ -6,7 +6,7 @@ from unittest import TestCase
 import fmf
 
 import tmt
-import tmt.cli._root
+import tmt.cli
 import tmt.log
 from tests import CliRunner
 from tmt.identifier import ID_KEY
@@ -18,6 +18,7 @@ root_logger = tmt.log.Logger.create()
 
 
 class IdEmpty(TestCase):
+
     def setUp(self):
         self.path = Path(tempfile.mkdtemp()) / "empty"
         shutil.copytree(test_path / "empty", self.path)
@@ -37,7 +38,6 @@ class IdEmpty(TestCase):
     def test_manually_add_id(self):
         # TODO: it's really not possible to use fixtures with methods??
         from tmt.log import Logger
-
         root_logger = Logger.create(verbose=0, debug=0, quiet=False)
 
         node = self.base_tree.find("/some/structure")
@@ -53,6 +53,7 @@ class IdEmpty(TestCase):
 
 
 class TestGeneratorDefined(TestCase):
+
     def setUp(self):
         self.path = Path(tempfile.mkdtemp()) / "defined"
         shutil.copytree(test_path / "defined", self.path)
@@ -64,9 +65,11 @@ class TestGeneratorDefined(TestCase):
         shutil.rmtree(self.path)
 
     def test_test_dry(self):
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "--dry", "^/no"])
+        result = runner.invoke(
+            tmt.cli.main, ["test", "id", "--dry", "^/no"])
         assert "added to test '/no" in result.output
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "--dry", "^/no"])
+        result = runner.invoke(
+            tmt.cli.main, ["test", "id", "--dry", "^/no"])
         assert "added to test '/no" in result.output
 
     def test_test_real(self):
@@ -75,9 +78,9 @@ class TestGeneratorDefined(TestCase):
         assert node.get(ID_KEY) is None
 
         # Generate only when called for the first time
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "^/no"])
+        result = runner.invoke(tmt.cli.main, ["test", "id", "^/no"])
         assert "added to test '/no" in result.output
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "^/no"])
+        result = runner.invoke(tmt.cli.main, ["test", "id", "^/no"])
         assert "added to test '/no" not in result.output
 
         # Defined after
@@ -86,6 +89,7 @@ class TestGeneratorDefined(TestCase):
 
 
 class TestGeneratorEmpty(TestCase):
+
     def setUp(self):
         self.path = Path(tempfile.mkdtemp()) / "empty"
         shutil.copytree(test_path / "empty", self.path)
@@ -97,16 +101,18 @@ class TestGeneratorEmpty(TestCase):
         shutil.rmtree(self.path)
 
     def test_test_dry(self):
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "--dry"])
+        result = runner.invoke(
+            tmt.cli.main, ["test", "id", "--dry"])
         assert "added to test '/some/structure'" in result.output
-        result = runner.invoke(tmt.cli._root.main, ["test", "id", "--dry"])
+        result = runner.invoke(
+            tmt.cli.main, ["test", "id", "--dry"])
         assert "added to test '/some/structure'" in result.output
 
     def test_test_real(self):
-        result = runner.invoke(tmt.cli._root.main, ["test", "id"])
+        result = runner.invoke(tmt.cli.main, ["test", "id"])
         assert "added to test '/some/structure'" in result.output
 
-        result = runner.invoke(tmt.cli._root.main, ["test", "id"])
+        result = runner.invoke(tmt.cli.main, ["test", "id"])
         assert "added to test '/some/structure'" not in result.output
 
         base_tree = fmf.Tree(self.path)

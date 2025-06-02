@@ -37,10 +37,8 @@ AREA_TITLES = {
     '/spec/plans': 'Plans',
     '/spec/stories': 'Stories',
     '/spec/context': 'Context',
-    '/spec/policy': 'Policy',
     '/spec/hardware': 'Hardware',
-    '/spec/results': 'Results',
-}
+    }
 
 
 def main() -> None:
@@ -55,19 +53,19 @@ def main() -> None:
     logger = tmt.Logger.create()
     logger.add_console_handler()
 
-    # Explore available plugins
-    tmt.plugins.explore(logger)
+    # Explore available *export* plugins - do not import other plugins, we don't need them.
+    tmt.plugins.explore_export_package(logger)
 
     # Generate stories
     tree = tmt.Tree(logger=logger, path=Path.cwd())
 
-    for area, title in AREA_TITLES.items():
+    for area in AREA_TITLES:
         logger.info(f'Generating rst files from {area}')
 
         with open(f"{area.lstrip('/')}.rst", 'w') as doc:
             # Anchor and title
             doc.write(f'.. _{area}:\n\n')
-            doc.write(f"{title}\n{'=' * len(title)}\n")
+            doc.write(f"{AREA_TITLES[area]}\n{'=' * len(AREA_TITLES[area])}\n")
             # Included stories
             for story in tree.stories(names=[area], whole=True):
                 if not story.enabled:
@@ -76,8 +74,7 @@ def main() -> None:
                 rendered = story.export(
                     format='rst',
                     include_title=story.name != area,
-                    template=story_template_filepath,
-                )
+                    template=story_template_filepath)
 
                 doc.write(rendered)
                 doc.write('\n\n')

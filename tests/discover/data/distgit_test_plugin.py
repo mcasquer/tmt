@@ -1,7 +1,7 @@
+
 import urllib.parse
 
-from tmt.utils import Path
-from tmt.utils.git import DistGitHandler
+from tmt.utils import DistGitHandler, Path
 
 MOCK_SOURCES_FILENAME = 'mock_sources'
 SERVER_PORT = 9000

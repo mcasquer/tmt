@@ -5,6 +5,7 @@ import fmf
 import fmf.utils
 
 import tmt
+import tmt.base
 import tmt.log
 import tmt.utils
 from tmt.base import DependencyFile
@@ -31,14 +32,13 @@ class File(Library):
     """
 
     def __init__(
-        self,
-        *,
-        identifier: DependencyFile,
-        parent: Optional[tmt.utils.Common] = None,
-        logger: tmt.log.Logger,
-        source_location: Path,
-        target_location: Path,
-    ) -> None:
+            self,
+            *,
+            identifier: DependencyFile,
+            parent: Optional[tmt.utils.Common] = None,
+            logger: tmt.log.Logger,
+            source_location: Path,
+            target_location: Path) -> None:
         super().__init__(parent=parent, logger=logger)
 
         self.identifier = identifier
@@ -50,20 +50,15 @@ class File(Library):
         self.target_location: Path = target_location
 
     def fetch(self) -> None:
-        """
-        Copy the files over to target location
-        """
-
+        """ Copy the files over to target location """
         patterns = fmf.utils.listed(self.pattern, quote="'")
         self.parent.debug(
-            f"Searching for patterns {patterns} in directory '{self.source_location}."
-        )
+            f"Searching for patterns {patterns} in directory '{self.source_location}.")
         files: list[Path] = tmt.utils.filter_paths(self.source_location, self.pattern)
         if not files:
             self.parent.debug('No files found.')
             raise tmt.utils.MetadataError(
-                f"Patterns {patterns} don't match any files in '{self.source_location}'."
-            )
+                f"Patterns {patterns} don't match any files in '{self.source_location}'.")
 
         # Nothing to do if source and target directory are identical.
         # Could be called at the very start of the method but we still

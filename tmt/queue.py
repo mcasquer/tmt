@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar
 
-from tmt.container import container
 from tmt.log import Logger
 
 if TYPE_CHECKING:
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
 TaskResultT = TypeVar('TaskResultT')
 
 
-@container
+@dataclasses.dataclass
 class Task(Generic[TaskResultT]):
     """
     A base class for queueable actions.
@@ -120,7 +119,7 @@ def prepare_loggers(logger: Logger, labels: list[str]) -> dict[str, Logger]:
     return loggers
 
 
-@container
+@dataclasses.dataclass
 class GuestlessTask(Task[TaskResultT]):
     """
     A task not assigned to a particular set of guests.
@@ -175,7 +174,7 @@ class GuestlessTask(Task[TaskResultT]):
             yield self
 
 
-@container
+@dataclasses.dataclass
 class MultiGuestTask(Task[TaskResultT]):
     """
     A task assigned to a particular set of guests.
@@ -253,7 +252,9 @@ class MultiGuestTask(Task[TaskResultT]):
 
                 # Submit each task/guest combination (save the guest & logger
                 # for later)...
-                futures[executor.submit(self.run_on_guest, guest, new_logger)] = guest
+                futures[
+                    executor.submit(self.run_on_guest, guest, new_logger)
+                    ] = guest
 
             # ... and then sit and wait as they get delivered to us as they
             # finish. Unpack the guest and logger, so we could preserve logging
@@ -292,9 +293,7 @@ class MultiGuestTask(Task[TaskResultT]):
 
 
 class Queue(list[TaskT]):
-    """
-    Queue class for running tasks
-    """
+    """ Queue class for running tasks """
 
     def __init__(self, name: str, logger: Logger) -> None:
         super().__init__()
@@ -303,17 +302,14 @@ class Queue(list[TaskT]):
         self._logger = logger
 
     def enqueue_task(self, task: TaskT) -> None:
-        """
-        Put new task into a queue
-        """
+        """ Put new task into a queue """
 
         self.append(task)
 
         self._logger.info(
             f'queued {self.name} task #{len(self)}',
             task.name,
-            color='cyan',
-        )
+            color='cyan')
 
     def run(self) -> Iterator[TaskT]:
         """
@@ -329,8 +325,7 @@ class Queue(list[TaskT]):
             self._logger.info(
                 f'{self.name} task #{i + 1}',
                 task.name,
-                color='cyan',
-            )
+                color='cyan')
 
             failed_tasks: list[TaskT] = []
 

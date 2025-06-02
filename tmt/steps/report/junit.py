@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import re
 import sys
@@ -7,45 +8,59 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypedDict, Union, cas
 from jinja2 import FileSystemLoader, select_autoescape
 
 import tmt
+import tmt.base
 import tmt.log
+import tmt.options
 import tmt.result
 import tmt.steps
 import tmt.steps.report
 import tmt.utils
-from tmt.container import container, field
+from tmt.plugins import ModuleImporter
 from tmt.result import ResultOutcome
-from tmt.utils import Path
+from tmt.utils import Path, field
 from tmt.utils.templates import default_template_environment, render_template_file
 
 if TYPE_CHECKING:
+    import lxml
+
     from tmt._compat.typing import TypeAlias
 
     XMLElement: TypeAlias = Any
 
 
-DEFAULT_FILENAME = 'junit.xml'
+DEFAULT_NAME = 'junit.xml'
 DEFAULT_FLAVOR_NAME = 'default'
 CUSTOM_FLAVOR_NAME = 'custom'
 
 # Relative path to tmt junit template directory.
 DEFAULT_TEMPLATE_DIR = Path('steps/report/junit/templates/')
 
+# ignore[unused-ignore]: Pyright would report that "module cannot be
+# used as a type", and it would be correct. On the other hand, it works,
+# and both mypy and pyright are able to propagate the essence of a given
+# module through `ModuleImporter` that, eventually, the module object
+# returned by the importer does have all expected members.
+#
+# The error message does not have its own code, but simple `type: ignore`
+# is enough to suppress it. And then mypy complains about an unused
+# ignore, hence `unused-ignore` code, leading to apparently confusing
+# directive.
+import_lxml: ModuleImporter['lxml'] = ModuleImporter(  # type: ignore[valid-type]
+    'lxml',
+    tmt.utils.ReportError,
+    "Missing 'lxml', fixable by 'pip install tmt[report-junit]'.")
+
 
 @overload
-def _duration_to_seconds_filter(duration: str) -> int:
-    pass
+def _duration_to_seconds_filter(duration: str) -> int: pass
 
 
 @overload
-def _duration_to_seconds_filter(duration: None) -> None:
-    pass
+def _duration_to_seconds_filter(duration: None) -> None: pass
 
 
 def _duration_to_seconds_filter(duration: Optional[str]) -> Optional[int]:
-    """
-    Convert valid duration string in to seconds
-    """
-
+    """ Convert valid duration string in to seconds """
     if duration is None:
         return None
     try:
@@ -56,9 +71,7 @@ def _duration_to_seconds_filter(duration: Optional[str]) -> Optional[int]:
 
 
 def _escape_control_chars_filter(func: Callable[[str], str]) -> Callable[[str], str]:
-    """
-    Wrap the escape filter function and escape ASCII chosen control characters
-    """
+    """ Wrap the escape filter function and escape ASCII chosen control characters """
 
     def wrapper(value: str) -> str:
         # Define unicode characters which are not allowed in the XML and need to be removed.
@@ -87,12 +100,10 @@ def _escape_control_chars_filter(func: Callable[[str], str]) -> Callable[[str], 
             (0xDFFFE, 0xDFFFF),
             (0xEFFFE, 0xEFFFF),
             (0xFFFFE, 0xFFFFF),
-            (0x10FFFE, 0x10FFFF),
-        ]
+            (0x10FFFE, 0x10FFFF)]
 
         illegal_ranges = [
-            f"{chr(low)}-{chr(high)}" for low, high in illegal_chars if low < sys.maxunicode
-        ]
+            f"{chr(low)}-{chr(high)}" for low, high in illegal_chars if low < sys.maxunicode]
 
         illegal_regex = re.compile("[{}]".format("".join(illegal_ranges)))
         escaped_value = illegal_regex.sub("", value)
@@ -112,9 +123,7 @@ class ImplementProperties:
     """
 
     class PropertyDict(TypedDict):
-        """
-        Defines a property dict, which gets propagated into the final template properties.
-        """
+        """ Defines a property dict, which gets propagated into the final template properties. """
 
         name: str
         value: str
@@ -140,19 +149,16 @@ class ResultWrapper(ImplementProperties):
     """
 
     def __init__(
-        self,
-        wrapped: Union[tmt.Result, tmt.result.SubResult],
-        subresults_context_class: 'type[ResultsContext]',
-    ) -> None:
+            self,
+            wrapped: Union[tmt.Result, tmt.result.SubResult],
+            subresults_context_class: 'type[ResultsContext]') -> None:
+
         super().__init__()
         self._wrapped = wrapped
         self._subresults_context_class = subresults_context_class
 
     def __getattr__(self, name: str) -> Any:
-        """
-        Returns an attribute of a wrapped ``tmt.Result`` instance
-        """
-
+        """ Returns an attribute of a wrapped ``tmt.Result`` instance """
         return getattr(self._wrapped, name)
 
     @property
@@ -166,8 +172,7 @@ class ResultWrapper(ImplementProperties):
         # the typing errors.
         if isinstance(self._wrapped, tmt.result.SubResult):
             raise AttributeError(
-                f"'{self._wrapped.__class__.__name__} object has no attribute 'subresult'"
-            )
+                f"'{self._wrapped.__class__.__name__} object has no attribute 'subresult'")
 
         return self._subresults_context_class(self._wrapped.subresult)
 
@@ -181,87 +186,60 @@ class ResultsContext(ImplementProperties):
     """
 
     def __init__(self, results: Union[list[tmt.Result], list[tmt.result.SubResult]]) -> None:
-        """
-        Decorate/wrap all the ``Result`` and ``SubResult`` instances with more attributes
-        """
-
+        """ Decorate/wrap all the ``Result`` and ``SubResult`` instances with more attributes """
         super().__init__()
 
         # Decorate all the tmt.Results with more attributes
         self._results: list[ResultWrapper] = [
-            ResultWrapper(r, subresults_context_class=self.__class__) for r in results
-        ]
+            ResultWrapper(r, subresults_context_class=self.__class__) for r in results]
 
     def __iter__(self) -> Iterator[ResultWrapper]:
-        """
-        Possibility to iterate over results by iterating an instance
-        """
-
+        """ Possibility to iterate over results by iterating an instance """
         return iter(self._results)
 
     def __len__(self) -> int:
-        """
-        Returns the number of results
-        """
-
+        """ Returns the number of results """
         return len(self._results)
 
     @functools.cached_property
     def passed(self) -> list[ResultWrapper]:
-        """
-        Returns results of passed tests
-        """
-
+        """ Returns results of passed tests """
         return [r for r in self._results if r.result == ResultOutcome.PASS]
 
     @functools.cached_property
     def skipped(self) -> list[ResultWrapper]:
-        """
-        Returns results of skipped tests
-        """
-
+        """ Returns results of skipped tests """
         return [r for r in self._results if r.result in (ResultOutcome.SKIP, ResultOutcome.INFO)]
 
     @functools.cached_property
     def failed(self) -> list[ResultWrapper]:
-        """
-        Returns results of failed tests
-        """
-
+        """ Returns results of failed tests """
         return [r for r in self._results if r.result == ResultOutcome.FAIL]
 
     @functools.cached_property
     def errored(self) -> list[ResultWrapper]:
-        """
-        Returns results of tests with error/warn outcome
-        """
-
+        """ Returns results of tests with error/warn outcome """
         return [r for r in self._results if r.result in (ResultOutcome.ERROR, ResultOutcome.WARN)]
 
     @functools.cached_property
     def duration(self) -> int:
-        """
-        Returns the total duration of all tests in seconds
-        """
-
+        """ Returns the total duration of all tests in seconds """
         # cast: mypy does not understand the proxy-ness of `ResultWrapper`. `r.duration`
         # will exists, therefore adding a `cast` to convince mypy the list is pretty much
         # nothing but the list of results.
-        return sum(
-            _duration_to_seconds_filter(r.duration) or 0
-            for r in cast(list[tmt.Result], self._results)
-        )
+        return sum(_duration_to_seconds_filter(r.duration)
+                   or 0 for r in cast(list[tmt.Result], self._results))
 
 
 def make_junit_xml(
-    phase: tmt.steps.report.ReportPlugin[Any],
-    flavor: str = DEFAULT_FLAVOR_NAME,
-    template_path: Optional[Path] = None,
-    include_output_log: bool = True,
-    prettify: bool = True,
-    results_context: Optional[ResultsContext] = None,
-    **extra_variables: Any,
-) -> str:
+        phase: tmt.steps.report.ReportPlugin[Any],
+        flavor: str = DEFAULT_FLAVOR_NAME,
+        template_path: Optional[Path] = None,
+        include_output_log: bool = True,
+        prettify: bool = True,
+        results_context: Optional[ResultsContext] = None,
+        **extra_variables: Any
+        ) -> str:
     """
     Create JUnit XML file and return the data.
 
@@ -283,20 +261,15 @@ def make_junit_xml(
     environment = default_template_environment()
 
     template_path = template_path or tmt.utils.resource_files(
-        DEFAULT_TEMPLATE_DIR / Path(f'{flavor}.xml.j2')
-    )
+        DEFAULT_TEMPLATE_DIR / Path(f'{flavor}.xml.j2'))
 
     # Use a FileSystemLoader for a non-custom flavor
     if flavor != CUSTOM_FLAVOR_NAME:
         environment.loader = FileSystemLoader(
-            searchpath=tmt.utils.resource_files(DEFAULT_TEMPLATE_DIR)
-        )
+            searchpath=tmt.utils.resource_files(DEFAULT_TEMPLATE_DIR))
 
     def _read_log_filter(log: Path) -> str:
-        """
-        Read the contents of a given result log
-        """
-
+        """ Read the contents of a given result log """
         if not log:
             return ''
 
@@ -305,30 +278,14 @@ def make_junit_xml(
         except tmt.utils.FileError:
             return ''
 
-    def _failures_filter(paths: list[Path]) -> list[str]:
-        """
-        Return a list of failures from a given failure log file
-        """
+    environment.filters.update({
+        'read_log': _read_log_filter,
+        'duration_to_seconds': _duration_to_seconds_filter,
+        'failures': tmt.result.Result.failures,
 
-        failures: list[str] = []
-        for path in paths:
-            try:
-                failures += tmt.utils.yaml_to_list(phase.step.plan.execute.read(path))
-            except tmt.utils.FileError:
-                phase.warn(f"Unable to read failure log file: '{path}'")
-                continue
-
-        return failures
-
-    environment.filters.update(
-        {
-            'read_log': _read_log_filter,
-            'duration_to_seconds': _duration_to_seconds_filter,
-            'failures': _failures_filter,
-            # Use a wrapper function to also _escape_control_chars.
-            'e': _escape_control_chars_filter(environment.filters['e']),
-        }
-    )
+        # Use a wrapper function to also _escape_control_chars.
+        'e': _escape_control_chars_filter(environment.filters['e']),
+        })
 
     # Explicitly enable the autoescape because it's disabled by default by tmt.
     # See /teemtee/tmt/issues/2873 for more info.
@@ -340,58 +297,51 @@ def make_junit_xml(
         RESULTS=results_context,
         PLAN=phase.step.plan,
         INCLUDE_OUTPUT_LOG=include_output_log,
-        **extra_variables,
-    )
+        **extra_variables)
 
     # Try to use lxml to check the flavor XML schema and prettify the final XML
     # output.
     try:
         from lxml import etree
-
     except ImportError:
-        from tmt.utils.hints import print_hints
-
-        print_hints('report/junit', logger=phase._logger)
-
+        phase.warn(
+            "Install 'tmt[report-junit]' to support neater JUnit XML output and the XML schema "
+            "validation against the XSD.")
         return xml_data
 
     xml_parser_kwargs: dict[str, Any] = {
         'remove_blank_text': prettify,
-        'huge_tree': True,
         'schema': None,
-    }
+        }
 
     # The schema check must be done only for a non-custom JUnit flavors
     if flavor != CUSTOM_FLAVOR_NAME:
-        xsd_schema_path = Path(
-            tmt.utils.resource_files(Path(f'steps/report/junit/schemas/{flavor}.xsd'))
-        )
+        xsd_schema_path = Path(tmt.utils.resource_files(
+            Path(f'steps/report/junit/schemas/{flavor}.xsd')))
 
         schema_root: XMLElement = etree.XML(xsd_schema_path.read_bytes())
         xml_parser_kwargs['schema'] = etree.XMLSchema(schema_root)
     else:
         phase.warn(
             f"The '{CUSTOM_FLAVOR_NAME}' JUnit flavor is used, you are solely responsible "
-            "for the validity of the XML schema."
-        )
+            "for the validity of the XML schema.")
 
         if prettify:
-            phase.warn(
-                f"The pretty print is always disabled for '{CUSTOM_FLAVOR_NAME}' JUnit flavor."
-            )
+            phase.warn(f"The pretty print is always disabled for '{CUSTOM_FLAVOR_NAME}' JUnit "
+                       "flavor.")
 
         xml_parser_kwargs['remove_blank_text'] = prettify = False
 
     xml_parser = etree.XMLParser(**xml_parser_kwargs)
     try:
-        # S320: Parsing of untrusted data is known to be vulnerable to XML attacks.
+        # S320: Parsing of untrusted data is known to be vulnerable to XML
+        # attacks.
         tree_root: XMLElement = etree.fromstring(xml_data, xml_parser)  # noqa: S320
 
     except etree.XMLSyntaxError as e:
         phase.warn(
             'The generated XML output is not a valid XML file or it is not valid against the '
-            'XSD schema.'
-        )
+            'XSD schema.')
 
         if flavor != CUSTOM_FLAVOR_NAME:
             phase.warn('Please, report this problem to project maintainers.')
@@ -410,8 +360,7 @@ def make_junit_xml(
             phase.verbose('rendered XML', xml_data, 'red')
             raise tmt.utils.ReportError(
                 'The generated XML output is not a valid XML file. Use `--verbose` argument '
-                'to show the output.'
-            ) from error
+                'to show the output.') from error
 
     # Do not be fooled by the `encoding` parameter: even with `utf-8`,
     # `tostring()` will still return bytes. `unicode`, on the other
@@ -423,36 +372,32 @@ def make_junit_xml(
         pretty_print=prettify,
         # The 'utf-8' encoding must be used instead of 'unicode', otherwise
         # the XML declaration is not included in the output.
-        encoding='utf-8',
-    )
+        encoding='utf-8')
 
     return str(xml_output.decode('utf-8'))
 
 
-@container
+@dataclasses.dataclass
 class ReportJUnitData(tmt.steps.report.ReportStepData):
     file: Optional[Path] = field(
         default=None,
         option='--file',
         metavar='PATH',
         help='Path to the file to store JUnit to.',
-        normalize=tmt.utils.normalize_path,
-    )
+        normalize=tmt.utils.normalize_path)
 
     flavor: str = field(
         default=DEFAULT_FLAVOR_NAME,
         option='--flavor',
-        choices=[DEFAULT_FLAVOR_NAME, CUSTOM_FLAVOR_NAME, 'subresults'],
-        help='Name of a JUnit flavor to generate.',
-    )
+        choices=[DEFAULT_FLAVOR_NAME, CUSTOM_FLAVOR_NAME],
+        help='Name of a JUnit flavor to generate.')
 
     template_path: Optional[Path] = field(
         default=None,
         option='--template-path',
         metavar='TEMPLATE_PATH',
         help='Path to a custom template file to use for JUnit creation.',
-        normalize=tmt.utils.normalize_path,
-    )
+        normalize=tmt.utils.normalize_path)
 
     prettify: bool = field(
         default=True,
@@ -462,31 +407,18 @@ class ReportJUnitData(tmt.steps.report.ReportStepData):
         help=f"""
             Enable the XML pretty print for generated JUnit file. This option is always disabled
             for '{CUSTOM_FLAVOR_NAME}' template flavor.
-            """,
-    )
+            """
+        )
 
     include_output_log: bool = field(
         default=True,
         option=('--include-output-log / --no-include-output-log'),
         is_flag=True,
         show_default=True,
-        help='Include full standard output in resulting xml file.',
-    )
+        help='Include full standard output in resulting xml file.')
 
 
-@tmt.steps.provides_method(
-    'junit',
-    installation_hint="""
-        For neater JUnit XML and XML validation against the XSD, ``lxml`` package is required
-        by the ``report/junit`` plugin.
-
-        To quickly test ``lxml`` presence, you can try running ``python -c 'import lxml'``.
-
-        * Users who installed tmt from system repositories should install ``tmt+report-junit``
-          package.
-        * Users who installed tmt from PyPI should install ``tmt[report-junit]`` extra.
-    """,
-)
+@tmt.steps.provides_method('junit')
 class ReportJUnit(tmt.steps.report.ReportPlugin[ReportJUnitData]):
     """
     Save test results in chosen JUnit flavor format.
@@ -496,70 +428,39 @@ class ReportJUnit(tmt.steps.report.ReportPlugin[ReportJUnitData]):
 
     When ``file`` is not specified, output is written into a file named ``junit.xml`` located in
     the current workdir.
-
-    .. code-block:: yaml
-
-        # Enable junit report from the command line
-        tmt run --all report --how junit
-        tmt run --all report --how junit --file test.xml
-
-    .. code-block:: yaml
-
-        # Use junit as the default report for given plan
-        report:
-            how: junit
-            file: test.xml
     """
 
     _data_class = ReportJUnitData
 
     def check_options(self) -> None:
-        """
-        Check the module options
-        """
+        """ Check the module options """
 
         if self.data.flavor == 'custom' and not self.data.template_path:
             raise tmt.utils.ReportError(
-                "The 'custom' flavor requires the '--template-path' argument."
-            )
+                "The 'custom' flavor requires the '--template-path' argument.")
 
         if self.data.flavor != 'custom' and self.data.template_path:
             raise tmt.utils.ReportError(
-                "The '--template-path' can be used only with '--flavor=custom'."
-            )
+                "The '--template-path' can be used only with '--flavor=custom'.")
 
-    @property
-    def _preserved_workdir_members(self) -> set[str]:
-        """
-        A set of members of the step workdir that should not be removed.
-        """
-
-        members = super()._preserved_workdir_members
-
-        if self.data.file is None:
-            members = {*members, DEFAULT_FILENAME}
-
-        return members
+    def prune(self, logger: tmt.log.Logger) -> None:
+        """ Do not prune generated junit report """
 
     def go(self, *, logger: Optional[tmt.log.Logger] = None) -> None:
-        """
-        Read executed tests and write junit
-        """
-
+        """ Read executed tests and write junit """
         super().go(logger=logger)
 
         self.check_options()
 
         assert self.workdir is not None
-        f_path = self.data.file or self.workdir / DEFAULT_FILENAME
+        f_path = self.data.file or self.workdir / DEFAULT_NAME
 
         xml_data = make_junit_xml(
             phase=self,
             flavor=self.data.flavor,
             template_path=self.data.template_path,
             include_output_log=self.data.include_output_log,
-            prettify=self.data.prettify,
-        )
+            prettify=self.data.prettify)
         try:
             f_path.write_text(xml_data)
             self.info('output', f_path, 'yellow')

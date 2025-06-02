@@ -25,21 +25,6 @@ properties:
       - enabled
       - disabled
 
-  crb:
-    type: string
-    enum:
-      - enabled
-      - disabled
-
-  profile:
-    type: string
-
-  fips:
-    type: string
-    enum:
-      - enabled
-      - disabled
-
   name:
     type: string
 
@@ -48,9 +33,6 @@ properties:
 
   where:
     $ref: "/schemas/common#/definitions/where"
-
-  when:
-    $ref: "/schemas/common#/definitions/when"
 
 required:
   - how

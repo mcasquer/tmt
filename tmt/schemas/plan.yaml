@@ -18,10 +18,6 @@ properties:
   adjust:
     $ref: "/schemas/core#/definitions/adjust"
 
-  # https://tmt.readthedocs.io/en/stable/spec/core.html#author
-  author:
-    $ref: "/schemas/core#/definitions/author"
-
   # https://tmt.readthedocs.io/en/stable/spec/core.html#contact
   contact:
     $ref: "/schemas/core#/definitions/contact"
@@ -119,52 +115,10 @@ properties:
 
     properties:
       import:
-        allOf:
-          - $ref: "/schemas/common#/definitions/fmf_id_base"
-
-        additionalProperties: false
-
-        # NOTE: Because of old jsonschema package on RHEL-8, we cannot use
-        # `url: true` and inherit `url` attributes from parent schema. It
-        # seems like we have to repeat properties schemas here as well.
-        properties:
-          url:
-            # https://github.com/teemtee/tmt/issues/1258
-            type: string
-
-          ref:
-            type: string
-
-          path:
-            type: string
-
-          name:
-            type: string
-            format: regex
-
-          importing:
-            type: string
-            enum:
-              - replace
-              - become-parent
-
-          scope:
-            type: string
-            enum:
-              - first-plan-only
-              - single-plan-only
-              - all-plans
-
-        required:
-          - url
-          - name
+        $ref: "/schemas/common#/definitions/fmf_id"
 
 oneOf:
   - required:
       - execute
   - required:
       - plan
-
-# User-defined metadata
-patternProperties:
-  ^extra-: {}

@@ -65,12 +65,9 @@ description: |
     See e.g. https://virtual-dba.com/blog/sockets-cores-and-threads/ for the
     socket, core and thread distinction.
 
-    See e.g. https://www.cpu-world.com/ for information on family, model,
-    stepping and corresponding names. ``/proc/cpuinfo`` and ``lscpu`` are
-    also useful resources.
-
-    .. versionchanged:: 1.39
-       ``beaker`` plugins supports ``family`` and ``frequency``
+    See e.g. https://en.wikichip.org/wiki/WikiChip for information on family,
+    model, stepping and corresponding names. ``/proc/cpuinfo`` and ``lscpu``
+    are also useful resources.
 
     .. versionchanged:: 1.38
        ``beaker`` plugins supports ``stepping``
@@ -125,8 +122,8 @@ example:
 
 link:
   - implemented-by: /tmt/steps/provision/artemis.py
-    note: "``cpu.vendor``, ``cpu.vendor-name``, ``cpu.frequency`` and ``cpu.hyper-threading`` not implemented yet"
+    note: "``cpu.vendor``, ``cpu.vendor-name`` and ``cpu.hyper-threading`` not implemented yet"
   - implemented-by: /tmt/steps/provision/mrack.py
-    note: "``cpu.sockets``, ``cpu.threads``, ``cpu.cores-per-socket``, ``cpu.threads-per-core``, ``cpu.family-name``, ``cpu.vendor`` not implemented yet"
+    note: "``cpu.flag``, ``cpu.processors``, ``cpu.model``, ``cpu.cores``, ``cpu.model-name``, ``cpu.hyper-threading``, ``cpu.stepping`` and ``cpu.vendor-name`` only"
   - implemented-by: /tmt/steps/provision/testcloud.py
     note: "``cpu.processors`` only"

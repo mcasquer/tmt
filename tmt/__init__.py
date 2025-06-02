@@ -1,24 +1,21 @@
-"""
-Test Management Tool
-"""
+""" Test Management Tool """
 
 import importlib.metadata
 
 __version__ = importlib.metadata.version(__name__)
 
 __all__ = [
-    'Clean',
+    'Tree',
+    'Test',
+    'Plan',
+    'Story',
+    'Run',
     'Guest',
     'GuestSsh',
-    'Logger',
-    'Plan',
     'Result',
-    'Run',
     'Status',
-    'Story',
-    'Test',
-    'Tree',
-]
+    'Clean',
+    'Logger']
 
 from tmt.base import Clean, Plan, Run, Status, Story, Test, Tree
 from tmt.log import Logger

@@ -1,21 +1,22 @@
+import dataclasses
 import enum
+import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
+import click
 import fmf
 import fmf.utils
 
-import tmt.container
 import tmt.identifier
 import tmt.log
 import tmt.utils
 from tmt.checks import CheckEvent, CheckResultInterpret
-from tmt.container import SerializableContainer, container, field
-from tmt.utils import GeneralError, Path
-from tmt.utils.themes import style
+from tmt.utils import GeneralError, Path, SerializableContainer, field
 
 if TYPE_CHECKING:
     import tmt.base
     import tmt.steps.execute
+    import tmt.steps.provision
 
 # Extra keys used for identification in Result class
 EXTRA_RESULT_IDENTIFICATION_KEYS = ['extra-nitrate', 'extra-task']
@@ -28,7 +29,6 @@ class ResultOutcome(enum.Enum):
     WARN = 'warn'
     ERROR = 'error'
     SKIP = 'skip'
-    PENDING = 'pending'
 
     @classmethod
     def from_spec(cls, spec: str) -> 'ResultOutcome':
@@ -54,8 +54,7 @@ class ResultOutcome(enum.Enum):
             ResultOutcome.PASS,
             ResultOutcome.INFO,
             ResultOutcome.SKIP,
-            ResultOutcome.PENDING,
-        )
+            )
 
         for outcome in outcomes_by_severity:
             if outcome in outcomes:
@@ -93,11 +92,10 @@ class ResultInterpret(enum.Enum):
 
     @classmethod
     def normalize(
-        cls,
-        key_address: str,
-        value: Any,
-        logger: tmt.log.Logger,
-    ) -> 'ResultInterpret':
+            cls,
+            key_address: str,
+            value: Any,
+            logger: tmt.log.Logger) -> 'ResultInterpret':
         if isinstance(value, ResultInterpret):
             return value
 
@@ -105,8 +103,7 @@ class ResultInterpret(enum.Enum):
             return cls.from_spec(value)
 
         raise tmt.utils.SpecificationError(
-            f"Invalid result interpretation '{value}' at {key_address}."
-        )
+            f"Invalid result interpretation '{value}' at {key_address}.")
 
 
 RESULT_OUTCOME_COLORS: dict[ResultOutcome, str] = {
@@ -117,8 +114,7 @@ RESULT_OUTCOME_COLORS: dict[ResultOutcome, str] = {
     ResultOutcome.ERROR: 'magenta',
     # TODO (happz) make sure the color is visible for all terminals
     ResultOutcome.SKIP: 'bright_black',
-    ResultOutcome.PENDING: 'cyan',
-}
+    }
 
 
 #: A type of collection IDs tracked for a single result.
@@ -129,11 +125,9 @@ ResultIds = dict[str, Optional[str]]
 RawResult = Any
 
 
-@container
+@dataclasses.dataclass
 class ResultGuestData(SerializableContainer):
-    """
-    Describes what tmt knows about a guest the result was produced on
-    """
+    """ Describes what tmt knows about a guest the result was produced on """
 
     name: str = f'{tmt.utils.DEFAULT_NAME}-0'
     role: Optional[str] = None
@@ -141,8 +135,9 @@ class ResultGuestData(SerializableContainer):
 
     @classmethod
     def from_test_invocation(
-        cls, *, invocation: 'tmt.steps.execute.TestInvocation'
-    ) -> 'ResultGuestData':
+            cls,
+            *,
+            invocation: 'tmt.steps.execute.TestInvocation') -> 'ResultGuestData':
         """
         Create a guest data for a result from a test invocation.
 
@@ -155,8 +150,7 @@ class ResultGuestData(SerializableContainer):
         return ResultGuestData(
             name=invocation.guest.name,
             role=invocation.guest.role,
-            primary_address=invocation.guest.primary_address,
-        )
+            primary_address=invocation.guest.primary_address)
 
 
 # This needs to be a stand-alone function because of the import of `tmt.base`.
@@ -167,32 +161,26 @@ def _unserialize_fmf_id(serialized: 'tmt.base._RawFmfId') -> 'tmt.base.FmfId':
     return FmfId.from_spec(serialized)
 
 
-@container
+@dataclasses.dataclass
 class BaseResult(SerializableContainer):
-    """
-    Describes what tmt knows about a result
-    """
+    """ Describes what tmt knows about a result """
 
     name: str
     result: ResultOutcome = field(
         default=ResultOutcome.PASS,
         serialize=lambda result: result.value,
-        unserialize=ResultOutcome.from_spec,
-    )
+        unserialize=ResultOutcome.from_spec
+        )
     original_result: ResultOutcome = field(
         default=ResultOutcome.PASS,
         serialize=lambda result: result.value,
-        unserialize=ResultOutcome.from_spec,
-    )
-    note: list[str] = field(
-        default_factory=cast(Callable[[], list[str]], list),
-        unserialize=lambda value: [] if value is None else value,
-    )
+        unserialize=ResultOutcome.from_spec
+        )
+    note: Optional[str] = None
     log: list[Path] = field(
         default_factory=cast(Callable[[], list[Path]], list),
         serialize=lambda logs: [str(log) for log in logs],
-        unserialize=lambda value: [Path(log) for log in value],
-    )
+        unserialize=lambda value: [Path(log) for log in value])
 
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -202,61 +190,37 @@ class BaseResult(SerializableContainer):
         self.original_result = self.result
 
     def show(self) -> str:
-        """
-        Return a nicely colored result with test name (and note)
-        """
+        """ Return a nicely colored result with test name (and note) """
 
         result = 'errr' if self.result == ResultOutcome.ERROR else self.result.value
 
         components: list[str] = [
-            style(result, fg=RESULT_OUTCOME_COLORS[self.result]),
-            self.name,
-        ]
+            click.style(result, fg=RESULT_OUTCOME_COLORS[self.result]),
+            self.name
+            ]
 
         if self.note:
-            components.append(f'({self.printable_note})')
+            components.append(f'({self.note})')
 
         return ' '.join(components)
 
-    @property
-    def printable_note(self) -> str:
-        return ', '.join(self.note)
 
-    @property
-    def failure_logs(self) -> list[Path]:
-        """
-        Return paths to all failure logs from the result
-        """
-
-        if self.result not in (ResultOutcome.FAIL, ResultOutcome.ERROR, ResultOutcome.WARN):
-            return []
-
-        return list(
-            {path for path in self.log if path.name == tmt.steps.execute.TEST_FAILURES_FILENAME}
-        )
-
-
-@container
+@dataclasses.dataclass
 class CheckResult(BaseResult):
-    """
-    Describes what tmt knows about a single test check result
-    """
+    """ Describes what tmt knows about a single test check result """
 
     event: CheckEvent = field(
         default=CheckEvent.BEFORE_TEST,
         serialize=lambda event: event.value,
-        unserialize=CheckEvent.from_spec,
-    )
+        unserialize=CheckEvent.from_spec)
 
     def to_subcheck(self) -> 'SubCheckResult':
-        """
-        Convert check to a tmt SubCheckResult
-        """
+        """ Convert check to a tmt SubCheckResult """
 
         return SubCheckResult.from_serialized(self.to_serialized())
 
 
-@container
+@dataclasses.dataclass
 class SubCheckResult(CheckResult):
     """
     Describes what tmt knows about a single subtest check result.
@@ -267,95 +231,76 @@ class SubCheckResult(CheckResult):
     """
 
 
-@container
+@dataclasses.dataclass
 class SubResult(BaseResult):
-    """
-    Describes what tmt knows about a single test subresult
-    """
+    """ Describes what tmt knows about a single test subresult """
 
     check: list[SubCheckResult] = field(
         default_factory=cast(Callable[[], list[SubCheckResult]], list),
         serialize=lambda results: [result.to_serialized() for result in results],
         unserialize=lambda serialized: [
-            SubCheckResult.from_serialized(check) for check in serialized
-        ],
-    )
-
-    @property
-    def failure_logs(self) -> list[Path]:
-        """
-        Return paths to all failure logs from the result
-        """
-
-        failure_logs = super().failure_logs
-        for check in self.check:
-            failure_logs += check.failure_logs
-        return list(set(failure_logs))
+            SubCheckResult.from_serialized(check) for check in serialized]
+        )
 
 
-@container
+@dataclasses.dataclass
 class PhaseResult(BaseResult):
-    """
-    Describes what tmt knows about result of individual phases, e.g. prepare ansible
-    """
+    """ Describes what tmt knows about result of individual phases, e.g. prepare ansible """
 
 
-@container
+@dataclasses.dataclass
 class Result(BaseResult):
-    """
-    Describes what tmt knows about a single test result
-    """
+    """ Describes what tmt knows about a single test result """
 
     serial_number: int = 0
     fmf_id: Optional['tmt.base.FmfId'] = field(
         default=cast(Optional['tmt.base.FmfId'], None),
         serialize=lambda fmf_id: fmf_id.to_minimal_spec() if fmf_id is not None else {},
-        unserialize=_unserialize_fmf_id,
-    )
+        unserialize=_unserialize_fmf_id
+        )
     context: tmt.utils.FmfContext = field(
         default_factory=tmt.utils.FmfContext,
         serialize=lambda context: context.to_spec(),
-        unserialize=lambda serialized: tmt.utils.FmfContext(serialized),
-    )
-    ids: ResultIds = field(default_factory=cast(Callable[[], ResultIds], dict))
+        unserialize=lambda serialized: tmt.utils.FmfContext(serialized)
+        )
+    ids: ResultIds = field(
+        default_factory=cast(Callable[[], ResultIds], dict)
+        )
     guest: ResultGuestData = field(
         default_factory=ResultGuestData,
         serialize=lambda value: value.to_serialized(),
-        unserialize=lambda serialized: ResultGuestData.from_serialized(serialized),
-    )
+        unserialize=lambda serialized: ResultGuestData.from_serialized(serialized)
+        )
 
     subresult: list[SubResult] = field(
         default_factory=cast(Callable[[], list[SubResult]], list),
         serialize=lambda results: [result.to_serialized() for result in results],
         unserialize=lambda serialized: [
-            SubResult.from_serialized(subresult) for subresult in serialized
-        ],
-    )
+            SubResult.from_serialized(subresult) for subresult in serialized]
+        )
 
     check: list[CheckResult] = field(
         default_factory=cast(Callable[[], list[CheckResult]], list),
         serialize=lambda results: [result.to_serialized() for result in results],
         unserialize=lambda serialized: [
-            CheckResult.from_serialized(check) for check in serialized
-        ],
-    )
+            CheckResult.from_serialized(check) for check in serialized]
+        )
     data_path: Optional[Path] = field(
         default=cast(Optional[Path], None),
         serialize=lambda path: None if path is None else str(path),
-        unserialize=lambda value: None if value is None else Path(value),
-    )
+        unserialize=lambda value: None if value is None else Path(value)
+        )
 
     @classmethod
     def from_test_invocation(
-        cls,
-        *,
-        invocation: 'tmt.steps.execute.TestInvocation',
-        result: ResultOutcome,
-        note: Optional[list[str]] = None,
-        ids: Optional[ResultIds] = None,
-        log: Optional[list[Path]] = None,
-        subresult: Optional[list[SubResult]] = None,
-    ) -> 'Result':
+            cls,
+            *,
+            invocation: 'tmt.steps.execute.TestInvocation',
+            result: ResultOutcome,
+            note: Optional[str] = None,
+            ids: Optional[ResultIds] = None,
+            log: Optional[list[Path]] = None,
+            subresult: Optional[list[SubResult]] = None) -> 'Result':
         """
         Create a result from a test invocation.
 
@@ -378,10 +323,12 @@ class Result(BaseResult):
         # to Polarion/Nitrate/other cases and report run results there
         # TODO: would an exception be better? Can test.id be None?
         ids = ids or {}
-        default_ids: ResultIds = {tmt.identifier.ID_KEY: invocation.test.id}
+        default_ids: ResultIds = {
+            tmt.identifier.ID_KEY: invocation.test.id
+            }
 
         for key in EXTRA_RESULT_IDENTIFICATION_KEYS:
-            value: Any = cast(Any, invocation.test.node.get(key))
+            value: Any = invocation.test.node.get(key)
 
             default_ids[key] = None if value is None else str(value)
 
@@ -394,7 +341,7 @@ class Result(BaseResult):
             fmf_id=invocation.test.fmf_id,
             context=invocation.phase.step.plan._fmf_context,
             result=result,
-            note=note or [],
+            note=note,
             start_time=invocation.start_time,
             end_time=invocation.end_time,
             duration=invocation.real_duration,
@@ -403,18 +350,23 @@ class Result(BaseResult):
             guest=ResultGuestData.from_test_invocation(invocation=invocation),
             data_path=invocation.relative_test_data_path,
             subresult=subresult or [],
-            check=invocation.check_results or [],
-        )
+            check=invocation.check_results or [])
 
         interpret_checks = {check.how: check.result for check in invocation.test.check}
 
         return _result.interpret_result(invocation.test.result, interpret_checks)
 
+    def append_note(self, note: str) -> None:
+        """ Append text to result note """
+        if self.note:
+            self.note += f", {note}"
+        else:
+            self.note = note
+
     def interpret_check_result(
-        self,
-        check_name: str,
-        interpret_checks: dict[str, CheckResultInterpret],
-    ) -> ResultOutcome:
+            self,
+            check_name: str,
+            interpret_checks: dict[str, CheckResultInterpret]) -> ResultOutcome:
         """
         Aggregate all checks of given name and interpret the outcome
 
@@ -425,8 +377,7 @@ class Result(BaseResult):
 
         # Reduce all check outcomes into a single worst outcome
         reduced_outcome = ResultOutcome.reduce(
-            [check.result for check in self.check if check.name == check_name]
-        )
+            [check.result for check in self.check if check.name == check_name])
 
         # Now let's handle the interpretation
         interpret = interpret_checks[check_name]
@@ -434,28 +385,29 @@ class Result(BaseResult):
 
         if interpret == CheckResultInterpret.RESPECT:
             if interpreted_outcome == ResultOutcome.FAIL:
-                self.note.append(f"check '{check_name}' failed")
+                self.append_note(f"check '{check_name}' failed")
 
         elif interpret == CheckResultInterpret.INFO:
             interpreted_outcome = ResultOutcome.INFO
-            self.note.append(f"check '{check_name}' is informational")
+            self.append_note(f"check '{check_name}' is informational")
 
         elif interpret == CheckResultInterpret.XFAIL:
+
             if reduced_outcome == ResultOutcome.PASS:
                 interpreted_outcome = ResultOutcome.FAIL
-                self.note.append(f"check '{check_name}' did not fail as expected")
+                self.append_note(f"check '{check_name}' did not fail as expected")
 
             if reduced_outcome == ResultOutcome.FAIL:
                 interpreted_outcome = ResultOutcome.PASS
-                self.note.append(f"check '{check_name}' failed as expected")
+                self.append_note(f"check '{check_name}' failed as expected")
 
         return interpreted_outcome
 
     def interpret_result(
-        self,
-        interpret: ResultInterpret,
-        interpret_checks: dict[str, CheckResultInterpret],
-    ) -> 'Result':
+            self,
+            interpret: ResultInterpret,
+            interpret_checks: dict[str, CheckResultInterpret]
+            ) -> 'Result':
         """
         Interpret result according to a given interpretation instruction.
 
@@ -469,17 +421,15 @@ class Result(BaseResult):
 
         if interpret not in ResultInterpret:
             raise tmt.utils.SpecificationError(
-                f"Invalid result '{interpret.value}' in test '{self.name}'."
-            )
+                f"Invalid result '{interpret.value}' in test '{self.name}'.")
 
         if interpret == ResultInterpret.CUSTOM:
             return self
 
         # Interpret check results (aggregated by the check name)
-        check_outcomes: list[ResultOutcome] = [
-            self.interpret_check_result(check_name, interpret_checks)
-            for check_name in tmt.utils.uniq([check.name for check in self.check])
-        ]
+        check_outcomes: list[ResultOutcome] = []
+        for check_name in tmt.utils.uniq([check.name for check in self.check]):
+            check_outcomes.append(self.interpret_check_result(check_name, interpret_checks))
 
         # Aggregate check results with the main test result
         self.result = ResultOutcome.reduce([self.result, *check_outcomes])
@@ -487,49 +437,42 @@ class Result(BaseResult):
         # Override result with result outcome provided by user
         if interpret not in (ResultInterpret.RESPECT, ResultInterpret.XFAIL):
             self.result = ResultOutcome(interpret.value)
-            self.note.append(f"test result overridden: {self.result.value}")
+            self.append_note(f"test result overridden: {self.result.value}")
 
             # Add original result to note if the result has changed
             if self.result != self.original_result:
-                self.note.append(f"original test result: {self.original_result.value}")
+                self.append_note(f"original test result: {self.original_result.value}")
 
             return self
 
         # Handle the expected fail
         if interpret == ResultInterpret.XFAIL:
+
             if self.result == ResultOutcome.PASS:
                 self.result = ResultOutcome.FAIL
-                self.note.append("test was expected to fail")
+                self.append_note("test was expected to fail")
 
             elif self.result == ResultOutcome.FAIL:
                 self.result = ResultOutcome.PASS
-                self.note.append("test failed as expected")
+                self.append_note("test failed as expected")
 
         # Add original result to note if the result has changed
         if self.result != self.original_result:
-            self.note.append(f"original test result: {self.original_result.value}")
+            self.append_note(f"original test result: {self.original_result.value}")
 
         return self
 
     def to_subresult(self) -> 'SubResult':
-        """
-        Convert result to tmt subresult
-        """
-        options = [
-            tmt.container.key_to_option(key) for key in tmt.container.container_keys(SubResult)
-        ]
+        """ Convert result to tmt subresult """
+        options = [tmt.utils.key_to_option(key) for key in tmt.utils.container_keys(SubResult)]
 
         return SubResult.from_serialized(
-            {option: value for option, value in self.to_serialized().items() if option in options}
-        )
+            {option: value for option, value in self.to_serialized().items() if option in options})
 
     @staticmethod
     def total(results: list['Result']) -> dict[ResultOutcome, int]:
-        """
-        Return dictionary with total stats for given results
-        """
-
-        stats = dict.fromkeys(RESULT_OUTCOME_COLORS, 0)
+        """ Return dictionary with total stats for given results """
+        stats = {result: 0 for result in RESULT_OUTCOME_COLORS}
 
         for result in results:
             stats[result.result] += 1
@@ -537,49 +480,41 @@ class Result(BaseResult):
 
     @staticmethod
     def summary(results: list['Result']) -> str:
-        """
-        Prepare a nice human summary of provided results
-        """
-
+        """ Prepare a nice human summary of provided results """
         stats = Result.total(results)
         comments = []
         if stats.get(ResultOutcome.PASS):
-            passed = ' ' + style('passed', fg='green')
+            passed = ' ' + click.style('passed', fg='green')
             comments.append(fmf.utils.listed(stats[ResultOutcome.PASS], 'test') + passed)
         if stats.get(ResultOutcome.FAIL):
-            failed = ' ' + style('failed', fg='red')
+            failed = ' ' + click.style('failed', fg='red')
             comments.append(fmf.utils.listed(stats[ResultOutcome.FAIL], 'test') + failed)
         if stats.get(ResultOutcome.SKIP):
-            skipped = ' ' + style('skipped', fg='bright_black')
+            skipped = ' ' + click.style('skipped', fg='bright_black')
             comments.append(fmf.utils.listed(stats[ResultOutcome.SKIP], 'test') + skipped)
         if stats.get(ResultOutcome.INFO):
             count, comment = fmf.utils.listed(stats[ResultOutcome.INFO], 'info').split()
-            comments.append(count + ' ' + style(comment, fg='blue'))
+            comments.append(count + ' ' + click.style(comment, fg='blue'))
         if stats.get(ResultOutcome.WARN):
             count, comment = fmf.utils.listed(stats[ResultOutcome.WARN], 'warn').split()
-            comments.append(count + ' ' + style(comment, fg='yellow'))
+            comments.append(count + ' ' + click.style(comment, fg='yellow'))
         if stats.get(ResultOutcome.ERROR):
             count, comment = fmf.utils.listed(stats[ResultOutcome.ERROR], 'error').split()
-            comments.append(count + ' ' + style(comment, fg='magenta'))
-        if stats.get(ResultOutcome.PENDING):
-            count, comment = str(stats[ResultOutcome.PENDING]), 'pending'
-            comments.append(count + ' ' + style(comment, fg='cyan'))
+            comments.append(count + ' ' + click.style(comment, fg='magenta'))
         # FIXME: cast() - https://github.com/teemtee/fmf/issues/185
         return cast(str, fmf.utils.listed(comments or ['no results found']))
 
     def show(self, display_guest: bool = True) -> str:
-        """
-        Return a nicely colored result with test name (and note)
-        """
+        """ Return a nicely colored result with test name (and note) """
 
         from tmt.steps.provision import format_guest_full_name
 
         result = 'errr' if self.result == ResultOutcome.ERROR else self.result.value
 
         components: list[str] = [
-            style(result, fg=RESULT_OUTCOME_COLORS[self.result]),
-            self.name,
-        ]
+            click.style(result, fg=RESULT_OUTCOME_COLORS[self.result]),
+            self.name
+            ]
 
         if display_guest and self.guest:
             assert self.guest.name  # narrow type
@@ -587,26 +522,61 @@ class Result(BaseResult):
             components.append(f'(on {format_guest_full_name(self.guest.name, self.guest.role)})')
 
         if self.note:
-            components.append(f'({self.printable_note})')
+            components.append(f'({self.note})')
 
         return ' '.join(components)
 
-    @property
-    def failure_logs(self) -> list[Path]:
-        """
-        Return paths to all failure logs from the result
-        """
+    @staticmethod
+    def failures(log: Optional[str], msg_type: str = 'FAIL') -> str:
+        """ Filter stdout and get only messages with certain type """
+        if not log:
+            return ''
+        filtered = ''
 
-        failure_logs = super().failure_logs
-        for check in self.check:
-            failure_logs += check.failure_logs
-        return list(set(failure_logs))
+        # Filter beakerlib style logs in the following way:
+        # 1. Reverse the log string by lines
+        # 2. Search for each FAIL and extract every associated line.
+        # 3. For failed phases also extract phase name so the log is easier to understand
+        # 4. Reverse extracted lines back into correct order.
+        if re.search(':: \\[   FAIL   \\] ::', log):  # dumb check for a beakerlib log
+            copy_line = False
+            copy_phase_name = False
+            failure_log: list[str] = []
+            # we will be processing log lines in a reversed order
+            iterator = iter(reversed(log.split("\n")))
+            for line in iterator:
+                # found FAIL enables log extraction
+                if re.search(':: \\[   FAIL   \\] ::', line):
+                    copy_line = True
+                    copy_phase_name = True
+                # BEGIN of rlRun block or previous command or beginning of a test section
+                # disables extraction
+                elif re.search('(:: \\[.{10}\\] ::|[:]{80})', line):
+                    copy_line = False
+                # extract line from the log
+                if copy_line:
+                    failure_log.append(line)
+                # Add beakerlib phase name to a failure log, in order to properly match the phase
+                # name we need to do this in two steps.
+                if copy_phase_name and re.search('[:]{80}', line):
+                    # read the next line containing phase name
+                    line = next(iterator)
+                    failure_log.append(f'\n{line}')
+                    copy_phase_name = False
+            # reverse extracted lines to restore previous order
+            failure_log.reverse()
+            return '\n'.join(failure_log).strip()
+
+        # Check for other failures and errors when not using beakerlib
+        for m in re.findall(
+                fr'.*\b(?=error|fail|{msg_type})\b.*', log, re.IGNORECASE | re.MULTILINE):
+            filtered += m + '\n'
+
+        return filtered or log
 
 
-def results_to_exit_code(results: list[Result], execute_enabled: bool = True) -> int:
-    """
-    Map results to a tmt exit code
-    """
+def results_to_exit_code(results: list[Result]) -> int:
+    """ Map results to a tmt exit code """
 
     from tmt.cli import TmtExitCode
 
@@ -630,43 +600,9 @@ def results_to_exit_code(results: list[Result], execute_enabled: bool = True) ->
     if sum(stats.values()) == stats[ResultOutcome.SKIP]:
         return TmtExitCode.ALL_TESTS_SKIPPED
 
-    # "No errors or fails, but there are pending tests."
-    if execute_enabled and stats[ResultOutcome.PENDING]:
-        return TmtExitCode.ERROR
-
     # "At least one test passed, there was no fail, warn or error."
-    if (
-        sum(stats.values())
-        == stats[ResultOutcome.PASS]
-        + stats[ResultOutcome.INFO]
-        + stats[ResultOutcome.SKIP]
-        + stats[ResultOutcome.PENDING]
-    ):
+    if sum(stats.values()) \
+            == stats[ResultOutcome.PASS] + stats[ResultOutcome.INFO] + stats[ResultOutcome.SKIP]:
         return TmtExitCode.SUCCESS
 
     raise GeneralError("Unhandled combination of test result.")
-
-
-def save_failures(
-    invocation: 'tmt.steps.execute.TestInvocation', directory: Path, failures: list[str]
-) -> Path:
-    """
-    Save test failures to a file.
-
-    :param invocation: test invocation.
-    :param directory: directory to save the file in.
-    :param failures: list of failures to save.
-    """
-
-    path = directory / tmt.steps.execute.TEST_FAILURES_FILENAME
-
-    try:
-        existing_failures = tmt.utils.yaml_to_list(invocation.phase.read(path))
-    except tmt.utils.FileError:
-        existing_failures = []
-
-    existing_failures += failures
-
-    invocation.phase.write(path, tmt.utils.dict_to_yaml(existing_failures))
-    assert invocation.phase.step.workdir is not None  # narrow type
-    return path.relative_to(invocation.phase.step.workdir)

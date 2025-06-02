@@ -310,29 +310,6 @@ definitions:
           - type: string
           - type: integer
 
-      management-controller:
-        type: object
-
-        properties:
-          protocol:
-            type: string
-
-          device:
-            anyOf:
-              - type: string
-              - type: integer
-
-          device-name:
-            type: string
-
-          vendor:
-            anyOf:
-              - type: string
-              - type: integer
-
-          vendor-name:
-            type: string
-
     additionalProperties: false
 
     # enforce at least one property
@@ -466,9 +443,6 @@ definitions:
             - "$ref": "#/definitions/block"
             - "$ref": "#/definitions/and"
             - "$ref": "#/definitions/or"
-        minItems: 1
-
-    additionalProperties: false
 
     required:
       - "and"
@@ -483,9 +457,6 @@ definitions:
             - "$ref": "#/definitions/block"
             - "$ref": "#/definitions/and"
             - "$ref": "#/definitions/or"
-        minItems: 1
-
-    additionalProperties: false
 
     required:
       - "or"

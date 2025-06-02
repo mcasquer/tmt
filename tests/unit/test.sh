@@ -54,8 +54,7 @@ rlJournalStart
         rlPhaseEnd
     else
         rlPhaseStartTest "Unit tests"
-            # Note: we're not in the root directory!
-            rlRun "hatch -v run $HATCH_ENVIRONMENT:$PYTEST_COMMAND $PYTEST_PARALLELIZE $PYTEST_MARK ."
+            rlRun "hatch -v run $HATCH_ENVIRONMENT:$PYTEST_COMMAND $PYTEST_PARALLELIZE $PYTEST_MARK tests/unit"
         rlPhaseEnd
     fi
 

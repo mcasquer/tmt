@@ -18,10 +18,6 @@ properties:
   adjust:
     $ref: "/schemas/core#/definitions/adjust"
 
-  # https://tmt.readthedocs.io/en/stable/spec/core.html#author
-  author:
-    $ref: "/schemas/core#/definitions/author"
-
   # https://tmt.readthedocs.io/en/stable/spec/tests.html#component
   component:
     $ref: "/schemas/common#/definitions/one_or_more_strings"
@@ -143,9 +139,9 @@ properties:
   tier:
     $ref: "/schemas/core#/definitions/tier"
 
-# User-defined metadata
 patternProperties:
-  ^extra-: {}
+  ^extra-:
+    type: string
 
 required:
   - test
@@ -164,11 +160,5 @@ definitions:
           - respect
           - xfail
           - info
-      ignore-pattern:
-        oneOf:
-          - type: string
-          - type: array
-            items:
-              type: string
     required:
       - how

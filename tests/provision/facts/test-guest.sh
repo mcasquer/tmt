@@ -1,7 +1,6 @@
 #!/bin/bash
 # vim: dict+=/usr/share/beakerlib/dictionary.vim cpt=.,w,b,u,t,i,k
 . /usr/share/beakerlib/beakerlib.sh || exit 1
-. ../../images.sh || exit 1
 
 rlJournalStart
     rlPhaseStartSetup
@@ -41,13 +40,11 @@ rlJournalStart
             fi
 
         elif [ "$PROVISION_HOW" = "container" ]; then
-            build_container_image "fedora/41/upstream\:latest"
-
-            provision_options="--image localhost/tmt/container/test/fedora/41/upstream:latest"
+            provision_options="--image fedora:39"
             bfu_provision_options="$provision_options --user=nobody"
 
             arch="$(arch)"
-            distro="Fedora Linux 41 (Container Image)"
+            distro="Fedora Linux 39 (Container Image)"
             kernel="$(uname -r)"
             package_manager="dnf"
 

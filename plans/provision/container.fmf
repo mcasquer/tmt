@@ -25,15 +25,3 @@ environment:
     PROVISION_HOW: container
 
 enabled: true
-
-/install:
-    discover+:
-        test: install
-
-/ansible:
-    discover+:
-        test: ansible
-
-/the-rest:
-    discover+:
-        exclude: (install|ansible)

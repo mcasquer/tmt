@@ -1,3 +1,4 @@
+import dataclasses
 from typing import Any, Optional, Union
 
 import tmt
@@ -6,41 +7,33 @@ import tmt.log
 import tmt.steps
 import tmt.steps.provision
 import tmt.utils
-from tmt.container import container
 from tmt.utils import Command, OnProcessStartCallback, Path, ShellScript
-from tmt.utils.wait import Waiting
 
 
-@container
+@dataclasses.dataclass
 class ProvisionLocalData(tmt.steps.provision.GuestData, tmt.steps.provision.ProvisionStepData):
     pass
 
 
 class GuestLocal(tmt.Guest):
-    """
-    Local Host
-    """
+    """ Local Host """
 
     localhost = True
     parent: Optional[tmt.steps.Step]
 
     @property
     def is_ready(self) -> bool:
-        """
-        Local is always ready
-        """
-
+        """ Local is always ready """
         return True
 
     def _run_ansible(
-        self,
-        playbook: tmt.steps.provision.AnsibleApplicable,
-        playbook_root: Optional[Path] = None,
-        extra_args: Optional[str] = None,
-        friendly_command: Optional[str] = None,
-        log: Optional[tmt.log.LoggingFunction] = None,
-        silent: bool = False,
-    ) -> tmt.utils.CommandOutput:
+            self,
+            playbook: Path,
+            playbook_root: Optional[Path] = None,
+            extra_args: Optional[str] = None,
+            friendly_command: Optional[str] = None,
+            log: Optional[tmt.log.LoggingFunction] = None,
+            silent: bool = False) -> tmt.utils.CommandOutput:
         """
         Run an Ansible playbook on the guest.
 
@@ -62,49 +55,33 @@ class GuestLocal(tmt.Guest):
 
         playbook = self._sanitize_ansible_playbook_path(playbook, playbook_root)
 
-        try:
-            # fmt: off
-            return self._run_guest_command(
-                Command(
-                    'sudo', '-E',
-                    'ansible-playbook',
-                    *self._ansible_verbosity(),
-                    *self._ansible_extra_args(extra_args),
-                    '-c', 'local',
-                    '-i', 'localhost,',
-                    playbook,
-                ),
-                env=self._prepare_environment(),
-                friendly_command=friendly_command,
-                log=log,
-                silent=silent,
-            )
-            # fmt: on
-        except tmt.utils.RunError as exc:
-            if exc.stderr and 'ansible-playbook: command not found' in exc.stderr:
-                from tmt.utils.hints import print_hints
+        return self._run_guest_command(
+            Command(
+                'sudo', '-E',
+                'ansible-playbook',
+                *self._ansible_verbosity(),
+                *self._ansible_extra_args(extra_args),
+                '-c', 'local',
+                '-i', 'localhost,',
+                playbook),
+            env=self._prepare_environment(),
+            friendly_command=friendly_command,
+            log=log,
+            silent=silent)
 
-                print_hints('ansible-not-available', logger=self._logger)
-            raise exc
-
-    def execute(
-        self,
-        command: Union[Command, ShellScript],
-        cwd: Optional[Path] = None,
-        env: Optional[tmt.utils.Environment] = None,
-        friendly_command: Optional[str] = None,
-        test_session: bool = False,
-        tty: bool = False,
-        silent: bool = False,
-        log: Optional[tmt.log.LoggingFunction] = None,
-        interactive: bool = False,
-        on_process_start: Optional[OnProcessStartCallback] = None,
-        **kwargs: Any,
-    ) -> tmt.utils.CommandOutput:
-        """
-        Execute command on localhost
-        """
-
+    def execute(self,
+                command: Union[Command, ShellScript],
+                cwd: Optional[Path] = None,
+                env: Optional[tmt.utils.Environment] = None,
+                friendly_command: Optional[str] = None,
+                test_session: bool = False,
+                tty: bool = False,
+                silent: bool = False,
+                log: Optional[tmt.log.LoggingFunction] = None,
+                interactive: bool = False,
+                on_process_start: Optional[OnProcessStartCallback] = None,
+                **kwargs: Any) -> tmt.utils.CommandOutput:
+        """ Execute command on localhost """
         # Prepare the environment (plan/cli variables override)
         environment = tmt.utils.Environment()
         environment.update(env or {})
@@ -126,13 +103,10 @@ class GuestLocal(tmt.Guest):
             cwd=cwd,
             interactive=interactive,
             on_process_start=on_process_start,
-            **kwargs,
-        )
+            **kwargs)
 
     def start(self) -> None:
-        """
-        Start the guest
-        """
+        """ Start the guest """
 
         self.debug(f"Doing nothing to start guest '{self.primary_address}'.")
 
@@ -140,55 +114,41 @@ class GuestLocal(tmt.Guest):
         self.verbose('topology address', self.topology_address, 'green')
 
     def stop(self) -> None:
-        """
-        Stop the guest
-        """
+        """ Stop the guest """
 
         self.debug(f"Doing nothing to stop guest '{self.primary_address}'.")
 
-    def reboot(
-        self,
-        hard: bool = False,
-        command: Optional[Union[Command, ShellScript]] = None,
-        waiting: Optional[Waiting] = None,
-    ) -> bool:
-        # No localhost reboot allowed!
+    def reboot(self,
+               hard: bool = False,
+               command: Optional[Union[Command, ShellScript]] = None,
+               timeout: Optional[int] = None) -> bool:
+        """ Reboot the guest, return True if successful """
+
         self.debug(f"Doing nothing to reboot guest '{self.primary_address}'.")
 
         return False
 
     def push(
-        self,
-        source: Optional[Path] = None,
-        destination: Optional[Path] = None,
-        options: Optional[list[str]] = None,
-        superuser: bool = False,
-    ) -> None:
-        """
-        Nothing to be done to push workdir
-        """
+            self,
+            source: Optional[Path] = None,
+            destination: Optional[Path] = None,
+            options: Optional[list[str]] = None,
+            superuser: bool = False) -> None:
+        """ Nothing to be done to push workdir """
 
     def pull(
-        self,
-        source: Optional[Path] = None,
-        destination: Optional[Path] = None,
-        options: Optional[list[str]] = None,
-        extend_options: Optional[list[str]] = None,
-    ) -> None:
-        """
-        Nothing to be done to pull workdir
-        """
+            self,
+            source: Optional[Path] = None,
+            destination: Optional[Path] = None,
+            options: Optional[list[str]] = None,
+            extend_options: Optional[list[str]] = None) -> None:
+        """ Nothing to be done to pull workdir """
 
 
 @tmt.steps.provides_method('local')
 class ProvisionLocal(tmt.steps.provision.ProvisionPlugin[ProvisionLocalData]):
     """
     Use local host for test execution.
-
-    Do not provision any system. Tests will be executed
-    directly on the localhost. Note that for some actions like
-    installing additional packages you need root permission or
-    enabled sudo.
 
     .. warning::
 
@@ -210,10 +170,6 @@ class ProvisionLocal(tmt.steps.provision.ProvisionPlugin[ProvisionLocalData]):
     Note that ``tmt run`` is expected to be executed under a regular user.
     If there are admin rights required (for example in the prepare step)
     you might be asked for a ``sudo`` password.
-
-    .. note::
-
-        Neither hard nor soft reboot is supported.
     """
 
     _data_class = ProvisionLocalData
@@ -225,10 +181,7 @@ class ProvisionLocal(tmt.steps.provision.ProvisionPlugin[ProvisionLocalData]):
     _guest = None
 
     def go(self, *, logger: Optional[tmt.log.Logger] = None) -> None:
-        """
-        Provision the container
-        """
-
+        """ Provision the container """
         super().go(logger=logger)
 
         # Create a GuestLocal instance
@@ -244,3 +197,7 @@ class ProvisionLocal(tmt.steps.provision.ProvisionPlugin[ProvisionLocalData]):
 
         self._guest = GuestLocal(logger=self._logger, data=data, name=self.name, parent=self.step)
         self._guest.setup()
+
+    def guest(self) -> Optional[GuestLocal]:
+        """ Return the provisioned guest """
+        return self._guest

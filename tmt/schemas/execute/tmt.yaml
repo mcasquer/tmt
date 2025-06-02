@@ -23,15 +23,9 @@ properties:
   exit-first:
     type: boolean
 
-  ignore-duration:
-    type: boolean
-
   # name attribute can exist if more methods
   name:
     type: string
-
-  restraint-compatible:
-    type: boolean
 
   # https://tmt.readthedocs.io/en/stable/spec/plans.html#script
   script:
