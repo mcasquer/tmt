@@ -32,7 +32,8 @@ def main() -> None:
     tmt.plugins._explore_packages(logger)
 
     known_methods = sorted(
-        tmt.steps.provision.ProvisionPlugin._supported_methods.iter_plugin_ids())
+        tmt.steps.provision.ProvisionPlugin._supported_methods.iter_plugin_ids()
+    )
 
     tree = tmt.Tree(logger=logger, path=Path.cwd())
 
@@ -47,9 +48,9 @@ def main() -> None:
         if hw_requirement == 'arch':
             continue
 
-        matrix[hw_requirement] = {
-            method: (False, int) for method in known_methods
-            }
+        # C420: current implementation creates a new tuple for each method
+        # https://github.com/teemtee/tmt/pull/3662#discussion_r2040669353
+        matrix[hw_requirement] = {method: (False, int) for method in known_methods}  # noqa: C420
 
         if not story.link:
             pass
@@ -74,11 +75,14 @@ def main() -> None:
             else:
                 matrix[hw_requirement][implemented_by_method] = (True, None)
 
-    output_filepath.write_text(render_template_file(
-        template_filepath,
-        LOGGER=logger,
-        MATRIX=matrix,
-        NOTES=notes))
+    output_filepath.write_text(
+        render_template_file(
+            template_filepath,
+            LOGGER=logger,
+            MATRIX=matrix,
+            NOTES=notes,
+        )
+    )
 
 
 if __name__ == '__main__':

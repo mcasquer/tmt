@@ -29,8 +29,8 @@ _POSSIBLE_THEMES: list[tuple[Optional[str], str]] = [
     # Fall back to sphinx_rtd_theme if available
     ('sphinx_rtd_theme', 'sphinx_rtd_theme'),
     # The default theme
-    (None, 'default')
-    ]
+    (None, 'default'),
+]
 
 # NOTE: this one is defined somewhere below, among original Sphinx config fields,
 # but we need it as early as possible to be set when loading themes.
@@ -38,9 +38,7 @@ _POSSIBLE_THEMES: list[tuple[Optional[str], str]] = [
 html_theme_path = []
 
 
-def _load_theme(
-        theme_package_name: str,
-        theme_name: str) -> bool:
+def _load_theme(theme_package_name: str, theme_name: str) -> bool:
     try:
         theme_package = importlib.import_module(theme_package_name)
 
@@ -74,7 +72,8 @@ if 'TMT_DOCS_THEME' in os.environ:
 
     except ValueError:
         raise tmt.utils.GeneralError(
-            f"Cannot split TMT_DOCS_THEME '{theme_specs}' into theme package and theme name.")
+            f"Cannot split TMT_DOCS_THEME '{theme_specs}' into theme package and theme name."
+        )
 
     if not _load_theme(theme_package_name, theme_name):
         raise tmt.utils.GeneralError(f"Cannot load theme from TMT_DOCS_THEME, '{theme_specs}'.")
@@ -109,7 +108,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autodoc.typehints',
     'sphinx_rtd_theme',
-    ]
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -189,7 +188,7 @@ autodoc_default_flags = ['members', 'undoc-members', 'show-inheritance', 'privat
 autodoc_default_options = {
     # Enable to "ignore" re-imported names in `tmt.__all__`
     'ignore-module-all': True
-    }
+}
 autoclass_content = "both"
 
 autodoc_typehints_format = 'short'
@@ -217,12 +216,13 @@ html_theme = HTML_THEME
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = 'https://raw.githubusercontent.com/teemtee/docs/main/logo/tmt-transparent-175x175.png'
+html_logo = 'https://raw.githubusercontent.com/teemtee/docs/main/logo/tmt-logo-dark-background.png'
 
 # The name of an image file (within the static path) to use as favicon of the
-# docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
-# pixels large.
-html_favicon = 'https://raw.githubusercontent.com/teemtee/docs/main/logo/tmt-favicon.ico'
+# docs.
+html_favicon = (
+    'https://raw.githubusercontent.com/teemtee/docs/main/logo/tmt-logo-dark-background.svg'
+)
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -299,26 +299,45 @@ htmlhelp_basename = 'doc'
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_man, '', 'tmt Documentation',
-     [author], 1)
-    ]
+man_pages = [(master_man, '', 'tmt Documentation', [author], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
 
 # -- Options for linkcheck builder ----------------------------------------
+linkcheck_request_headers = {
+    r"https://github\.com/.*": {
+        "User-Agent": "tmt-docs-linkcheck/1.0 (GitHub Actions)",
+    },
+}
+
+github_token = os.environ.get('GITHUB_TOKEN')
+
+if github_token:
+    linkcheck_request_headers[r"https://github\.com/.*"]["Authorization"] = (
+        f"Bearer {github_token}"
+    )
+    print("INFO: Using GITHUB_TOKEN for linkcheck requests to github.com")
+else:
+    print("INFO: GITHUB_TOKEN not found. linkcheck requests to github will be unauthenticated.")
+
 linkcheck_retries = 3
 linkcheck_ignore = [
     # Github "source code line" anchors are apparently too dynamic for linkcheck
     # to detect correctly. The link exists, a browser can open it, but linkcheck
     # reports a broken link.
-    r'https://github.com/packit/packit/blob/main/packit/utils/logging.py#L10'
-    ]
+    r'https://github.com/packit/packit/blob/main/packit/utils/logging.py#L10',
+    # The site repeatedly refuses to serve pages to github
+    r'https://www.cpu-world.com.*',
+    # Stack Overflow uses captcha and these links are not essential
+    r'https://stackoverflow.com.*',
+]
 
 
 def generate_tmt_docs(app: Sphinx, config: Any) -> None:
-    """ Run `make generate` to populate the auto-generated sources """
+    """
+    Run `make generate` to populate the auto-generated sources
+    """
 
     conf_dir = Path(app.confdir)
     subprocess.run(["make", "generate"], cwd=conf_dir, check=True)

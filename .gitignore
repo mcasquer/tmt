@@ -2,15 +2,17 @@
 
 /tmp/
 docs/code/autodocs/*.rst
-docs/code/template-filters.rst
+docs/code/template-extensions.rst
 docs/plugins/discover.rst
 docs/plugins/execute.rst
 docs/plugins/finish.rst
 docs/plugins/prepare.rst
 docs/plugins/provision.rst
 docs/plugins/report.rst
+docs/plugins/prepare-feature.rst
 docs/plugins/test-checks.rst
 docs/plugins/hardware-matrix.rst
+docs/guide/test-runner-guest-compatibility-matrix.inc.rst
 docs/_build
 docs/spec
 docs/stories

@@ -53,5 +53,7 @@ Level 3: Stories
     spec/plans
     spec/stories
     spec/context
+    spec/policy
     spec/hardware
+    spec/results
     spec/lint

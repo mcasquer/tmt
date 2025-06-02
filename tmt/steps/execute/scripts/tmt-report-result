@@ -2,8 +2,16 @@
 set -o errexit -o pipefail -o noclobber -o nounset
 
 REPORT_RESULT_OUTPUTFILE="$TMT_TEST_DATA/tmt-report-results.yaml"
-outputFile=
+TMT_RESTRAINT_COMPATIBLE="${TMT_RESTRAINT_COMPATIBLE:-1}"
 help=False
+
+# In the restraint-compatible mode check the $OUTPUTFILE variable
+# as well for the default log file location
+if [ "$TMT_RESTRAINT_COMPATIBLE" == "1" ]; then
+    outputFile="${OUTPUTFILE:-}"
+else
+    outputFile=""
+fi
 
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
@@ -27,9 +35,16 @@ copy_outputfile_to_data_dir () {
     fileprefix=$(echo "$TESTNAME" | tr / _ | tr ' ' _)
     # Cut first char if underscore.
     [[ ${fileprefix:0:1} == '_' ]] && fileprefix=$(echo "$fileprefix" | cut -c 2-)
-    # Copy outputfile to data dir. Prefix with underscored test name.
-    cp -f "$outputFile" "${TMT_TEST_DATA}/${fileprefix}_${filename}"
-    outputFile="$fileprefix"_"$filename"
+    # Construct the final outputfile.
+    relativeFinalOutputFile="${fileprefix}/${filename}.txt"
+    finalOutputFile="${TMT_TEST_DATA}/${relativeFinalOutputFile}"
+    # make sure the directory exists.
+    mkdir -p "$(dirname "$finalOutputFile")"
+    # Copy outputfile to data dir.
+    cp -f "$outputFile" "$finalOutputFile"
+    # Make sure that the log file is readable for guest.pull()
+    chmod a+r "$finalOutputFile"
+    outputFile="${relativeFinalOutputFile}"
 }
 
 position=

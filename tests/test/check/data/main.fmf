@@ -3,6 +3,9 @@
     check: dmesg
 
     /harmless:
+        test: bash -c 'sleep 5'
+
+    /harmless2:
 
     /segfault:
         test: echo Some segfault happened > /dev/kmsg
@@ -13,22 +16,75 @@
             failure-pattern:
               - 'Hypervisor detected'
 
+    /multiple-reports:
+        check:
+          - how: dmesg
+            result: respect
+          - how: dmesg
+            result: respect
+          - how: dmesg
+            result: respect
+
 /avc:
-  check:
-    - how: avc
+  /checkpoint:
+    check:
+      - how: avc
+        test-method: checkpoint
 
-  /harmless:
-    test: /bin/true
-    order: 100
+    /harmless:
+      test: /bin/true
+      order: 100
 
-  /nasty:
-    test: |
-      set -x
-      systemctl status auditd || /bin/true
-      systemctl start auditd
-      sudo bash -c "passwd --help &> /root/passwd.log; \
-                    ls -alZ /root/passwd.log; \
-                    rm -f /root/passwd.log" || /bin/true
+    /nasty:
+      test: |
+        set -x
+        systemctl status auditd || /bin/true
+        systemctl start auditd
+        sleep 10
+        sudo bash -c "passwd --help &> /root/passwd.log; \
+                      ls -alZ /root/passwd.log; \
+                      rm -f /root/passwd.log" || /bin/true
+
+  /timestamp:
+    check:
+      - how: avc
+        test-method: timestamp
+
+    /harmless:
+      test: /bin/true
+      order: 100
+
+    /nasty:
+      test: |
+        set -x
+        systemctl status auditd || /bin/true
+        systemctl start auditd
+        sleep 10
+        sudo bash -c "passwd --help &> /root/passwd.log; \
+                      ls -alZ /root/passwd.log; \
+                      rm -f /root/passwd.log" || /bin/true
+
+/coredump:
+    check:
+      - how: coredump
+
+    /harmless:
+        test: /bin/true
+        summary: Test coredump check passes with no crashes
+
+    /segfault:
+        test: |
+            sleep 10 & kill -SIGSEGV %1
+        summary: Test coredump check fails with segfault
+
+    /ignore-pattern:
+        check:
+          - how: coredump
+            ignore-pattern:
+              - 'Signal:\s+\d+\s+\((SIG)?SEGV\)'
+        test: |
+            sleep 10 & kill -SIGSEGV %1
+        summary: Test coredump check passes with ignored crash pattern
 
 /watchdog/ping:
   require:

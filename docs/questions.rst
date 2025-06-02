@@ -30,6 +30,19 @@ __ https://tmt.readthedocs.io/en/latest/
 .. _libvirt:
 
 
+Who is using tmt?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Are there any example projects which are using ``tmt`` which I
+could use as an inspiration for my initial configuration setup?
+
+* The `HealthTrio Success Story`__ with CentOS Stream and tmt
+* The `AlmaLinux`__ community is using tmt for its compose testing
+
+__ https://blog.centos.org/2024/01/managing-internal-ci-tests-with-tmt-for-centos-stream-updates/
+__ https://github.com/AlmaLinux/compose-tests
+
+
 Using tmt outside of Fedora, CentOS and RHEL distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -46,11 +59,11 @@ On the other hand - when tmt is used to execute tests on
 provisioned guest it depends if the plan will try to install any
 packages (either by test :ref:`/spec/tests/require`,
 :ref:`/spec/tests/recommend` or using prepare
-:ref:`/spec/plans/prepare/install` plugin) it will fail as tmt
+:ref:`/plugins/prepare/install` plugin) it will fail as tmt
 currently doesn't work with other package management tools. This
 can be worked around by installing the test dependencies (as well
-as the ``rsync`` command) using :ref:`/spec/plans/prepare/ansible`
-or :ref:`/spec/plans/prepare/shell` prepare plugins.
+as the ``rsync`` command) using :ref:`/plugins/prepare/ansible`
+or :ref:`/plugins/prepare/shell` prepare plugins.
 
 
 Virtualization Tips
@@ -156,6 +169,85 @@ The following attributes, if present, are exported as well:
 They have the ``extra`` prefix as they are not part of the L1
 Metadata Specification and are supposed to be synced temporarily
 to keep backward compatibility.
+
+
+.. _restraint-compatibility:
+
+Restraint Compatibility
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For backward-compatibility ``tmt`` provides selected commands
+of the `restraint`__ framework so that existing tests can be more
+easily migrated. Currently the following scripts are supported:
+
+* ``rhts-abort`` and ``rstrnt-abort`` — :ref:`/stories/features/abort`
+* ``rhts-reboot`` and ``rstrnt-reboot`` — :ref:`/stories/features/reboot`
+* ``rhts-submit-log`` and ``rstrnt-report-log`` — :ref:`/stories/features/report-log`
+* ``rhts-report-result`` and ``rstrnt-report-result`` — :ref:`/stories/features/report-result`
+
+Note that these scripts cover only the common use cases and some
+of their irrelevant options, such as ``--server`` used for the
+restraint server, are ignored.
+
+.. warning::
+
+    Currently this functionality is enabled by default. If your
+    tests depend on these compatibility scripts, please ensure
+    that the ``restraint-compatible`` option is enabled under the
+    :ref:`/plugins/execute/tmt` execute step. In the future these
+    scripts will be available on the guest only if this option is
+    enabled.
+
+    .. code-block:: yaml
+
+        execute:
+            how: tmt
+            restraint-compatible: true
+
+    If possible, we recommend to update your existing tests and
+    use ``tmt-abort``, ``tmt-reboot``, ``tmt-file-submit`` and
+    ``tmt-report-result`` scripts instead. These are not planned
+    to be removed and will be supported in the future.
+
+__ https://restraint.readthedocs.io/
+
+
+.. _mulithost-compatibility:
+
+Multihost Compatibility
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some older tests might be using the ``CLIENTS`` and ``SERVERS``
+environment variables to get the information about the guests
+involved in the multihost testing. In order to provide these
+variables to all tests in a tmt plan it is possible to use the
+``TMT_PLAN_ENVIRONMENT_FILE`` variable and set them based on the
+:ref:`/spec/plans/guest-topology`. The example below demonstrates
+the usage on a simple tmt plan:
+
+.. code-block:: yaml
+
+    provision:
+      - name: server
+        how: virtual
+        connection: system
+      - name: client
+        how: virtual
+        connection: system
+
+    prepare:
+      - summary: Export client and server hostname for all tests
+        how: shell
+        script: |
+            source "$TMT_TOPOLOGY_BASH"
+            echo "CLIENTS=${TMT_GUESTS[client.hostname]}" >> "$TMT_PLAN_ENVIRONMENT_FILE"
+            echo "SERVERS=${TMT_GUESTS[server.hostname]}" >> "$TMT_PLAN_ENVIRONMENT_FILE"
+
+    execute:
+        how: tmt
+        script: |
+            echo "clients: $CLIENTS"
+            echo "servers: $SERVERS"
 
 
 Why is the 'id' key added to my test during export?

@@ -1,4 +1,3 @@
-import dataclasses
 import webbrowser
 from typing import Optional
 
@@ -6,31 +5,42 @@ from jinja2 import select_autoescape
 
 import tmt
 import tmt.log
-import tmt.options
 import tmt.steps
 import tmt.steps.report
 import tmt.utils
 import tmt.utils.templates
-from tmt.utils import Path, field
+from tmt.container import container, field
+from tmt.utils import Path
 
 HTML_TEMPLATE_PATH = tmt.utils.resource_files('steps/report/html/template.html.j2')
+DEFAULT_NAME = 'index.html'
+
+DEFAULT_FILENAME = 'index.html'
 
 
-@dataclasses.dataclass
+@container
 class ReportHtmlData(tmt.steps.report.ReportStepData):
+    file: Optional[Path] = field(
+        default=None,
+        option='--file',
+        metavar='PATH',
+        help='Path to the file to store HTML report to.',
+        normalize=tmt.utils.normalize_path,
+    )
+
     open: bool = field(
         default=False,
         option=('-o', '--open'),
         is_flag=True,
-        help='Open results in your preferred web browser.'
-        )
+        help='Open results in your preferred web browser.',
+    )
 
     absolute_paths: bool = field(
         default=False,
         option='--absolute-paths',
         is_flag=True,
-        help='Make paths absolute rather than relative to working directory.'
-        )
+        help='Make paths absolute rather than relative to working directory.',
+    )
 
     display_guest: str = field(
         default='auto',
@@ -40,7 +50,8 @@ class ReportHtmlData(tmt.steps.report.ReportStepData):
         help="""
              When to display full guest name in report: when more than a single guest was involved
              (default), always, or never.
-             """)
+             """,
+    )
 
 
 @tmt.steps.provides_method('html')
@@ -48,10 +59,21 @@ class ReportHtml(tmt.steps.report.ReportPlugin[ReportHtmlData]):
     """
     Format test results into an HTML report.
 
+    Create a local ``html`` file with test results arranged in
+    a table. Optionally open the page in the default browser.
+
     Example config:
 
     .. code-block:: yaml
 
+        # Enable html report from the command line
+        tmt run --all report --how html
+        tmt run --all report --how html --open
+        tmt run -l report -h html -o
+
+    .. code-block:: yaml
+
+        # Use html as the default report for given plan
         report:
             how: html
             open: true
@@ -59,11 +81,19 @@ class ReportHtml(tmt.steps.report.ReportPlugin[ReportHtmlData]):
 
     _data_class = ReportHtmlData
 
-    def prune(self, logger: tmt.log.Logger) -> None:
-        """ Do not prune generated html report """
+    @property
+    def _preserved_workdir_members(self) -> set[str]:
+        """
+        A set of members of the step workdir that should not be removed.
+        """
+
+        return {DEFAULT_FILENAME}
 
     def go(self, *, logger: Optional[tmt.log.Logger] = None) -> None:
-        """ Process results """
+        """
+        Process results
+        """
+
         super().go(logger=logger)
 
         # Prepare the template
@@ -74,6 +104,7 @@ class ReportHtml(tmt.steps.report.ReportPlugin[ReportHtmlData]):
         environment.autoescape = select_autoescape(enabled_extensions=('html.j2'))
 
         if self.data.absolute_paths:
+
             def _linkable_path(path: str) -> str:
                 return str(Path(path).absolute())
 
@@ -94,43 +125,42 @@ class ReportHtml(tmt.steps.report.ReportPlugin[ReportHtmlData]):
             display_guest = False
 
         else:
-            seen_guests = {
-                result.guest.name
-                for result in self.step.plan.execute.results()
-                }
+            seen_guests = {result.guest.name for result in self.step.plan.execute.results()}
 
             display_guest = len(seen_guests) > 1
 
         # Write the report
-        filename = Path('index.html')
+        assert self.workdir is not None
+        filepath = self.data.file or self.workdir / DEFAULT_FILENAME
 
-        self.write(
-            filename,
-            data=tmt.utils.templates.render_template_file(
-                HTML_TEMPLATE_PATH,
-                environment,
-                results=self.step.plan.execute.results(),
-                base_dir=self.step.plan.execute.workdir,
-                plan=self.step.plan,
-                display_guest=display_guest))
+        try:
+            filepath.write_text(
+                tmt.utils.templates.render_template_file(
+                    HTML_TEMPLATE_PATH,
+                    environment,
+                    results=self.step.plan.execute.results(),
+                    base_dir=self.step.plan.execute.workdir,
+                    plan=self.step.plan,
+                    display_guest=display_guest,
+                ),
+            )
+
+        except Exception as error:
+            raise tmt.utils.ReportError(f"Failed to write the output '{filepath}'.") from error
 
         # Nothing more to do in dry mode
         if self.is_dry_run:
             return
 
         # Show output file path
-        assert self.workdir is not None
-        target = self.workdir / filename
-        self.info("output", target, color='yellow')
+        self.info("output", filepath, color='yellow')
         if not self.data.open:
             return
 
         # Open target in webbrowser
         try:
-            if webbrowser.open(f"file://{target}", new=0):
-                self.info(
-                    'open', 'Successfully opened in the web browser.',
-                    color='green')
+            if webbrowser.open(f"file://{filepath}", new=0):
+                self.info('open', 'Successfully opened in the web browser.', color='green')
                 return
             self.fail("Failed to open the web browser.")
         except Exception as error:

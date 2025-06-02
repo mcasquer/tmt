@@ -52,6 +52,9 @@ properties:
   where:
     $ref: "/schemas/common#/definitions/where"
 
+  when:
+    $ref: "/schemas/common#/definitions/when"
+
   tests:
     type: array
     items:
@@ -64,6 +67,14 @@ properties:
         # https://tmt.readthedocs.io/en/stable/spec/core.html#adjust
         adjust:
           $ref: "/schemas/core#/definitions/adjust"
+
+        # https://tmt.readthedocs.io/en/stable/spec/core.html#author
+        author:
+          $ref: "/schemas/core#/definitions/author"
+
+        # https://tmt.readthedocs.io/en/stable/spec/tests.html#check
+        check:
+          $ref: "/schemas/test#/properties/check"
 
         # https://tmt.readthedocs.io/en/stable/spec/tests.html#component
         component:
@@ -92,6 +103,10 @@ properties:
         # https://tmt.readthedocs.io/en/stable/spec/tests.html#framework
         framework:
           $ref: "/schemas/test#/properties/framework"
+
+        # https://tmt.readthedocs.io/en/stable/spec/core.html#id
+        id:
+          $ref: "/schemas/core#/definitions/id"
 
         # https://tmt.readthedocs.io/en/stable/spec/core.html#link
         link:
@@ -141,9 +156,13 @@ properties:
         tier:
           $ref: "/schemas/test#/properties/tier"
 
+        # https://tmt.readthedocs.io/en/stable/spec/tests.html#tty
+        tty:
+          $ref: "/schemas/test#/properties/tty"
+
+      # User-defined metadata
       patternProperties:
-        ^extra-:
-          type: string
+        ^extra-: {}
 
       required:
         - name

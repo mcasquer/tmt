@@ -58,7 +58,7 @@ as something that will be pasted into release notes:
 Why should I care?
 
 * It helps others (and yourself) find relevant commits quickly.
-* The summary line will be re-used later (e.g. for rpm changelog).
+* The summary line will be reused later (e.g. for rpm changelog).
 * Some tools do not handle wrapping, so it is then hard to read.
 * You will make the maintainers happy to read beautiful commits :)
 
@@ -200,23 +200,23 @@ The following tags can be used to enable given test under the
 respective provision method plan:
 
 provision-artemis
-    For tests checking the :ref:`/spec/plans/provision/artemis`
+    For tests checking the :ref:`/plugins/provision/artemis`
     plugin functionality.
 
 provision-beaker
-    For tests checking the :ref:`/spec/plans/provision/beaker`
+    For tests checking the :ref:`/plugins/provision/beaker`
     plugin functionality using the ``mrack`` plugin.
 
 provision-connect
-    For tests checking the :ref:`/spec/plans/provision/connect`
+    For tests checking the :ref:`/plugins/provision/connect`
     plugin functionality.
 
 provision-container
-    For tests checking the :ref:`/spec/plans/provision/container`
+    For tests checking the :ref:`/plugins/provision/container`
     provision method using the ``podman`` plugin.
 
 provision-virtual
-    For tests checking the :ref:`/spec/plans/provision/virtual`
+    For tests checking the :ref:`/plugins/provision/virtual.testcloud`
     provision method using the ``testcloud`` plugin.
 
 provision-ssh
@@ -253,7 +253,7 @@ __ https://requre.readthedocs.io/en/latest/
 Images
 ------------------------------------------------------------------
 
-Tests which exercise the :ref:`/spec/plans/provision/container`
+Tests which exercise the :ref:`/plugins/provision/container`
 provisioning plugin with various guest environments should use the
 custom-built set of container images rather than using the upstream ones
 directly. We built custom images to have better control over the initial
@@ -312,17 +312,17 @@ For example, the following images can be found:
 .. code-block::
 
     # Latest Alpine, with added Bash to simulate proper essential setup:
-    localhost/tmt/tests/container/alpine
+    localhost/tmt/container/test/alpine
 
     # Various CentOS releases:
-    localhost/tmt/tests/container/centos/7
-    localhost/tmt/tests/container/centos/stream9
+    localhost/tmt/container/test/centos/7
+    localhost/tmt/container/test/centos/stream9
 
     # Fedora rawhide, with dnf5 pre-installed:
-    localhost/tmt/tests/container/fedora/rawhide
+    localhost/tmt/container/test/fedora/rawhide
 
     # Same, but with password-less sudo set up:
-    localhost/tmt/tests/container/fedora/rawhide/unprivileged
+    localhost/tmt/container/test/fedora/rawhide/unprivileged
 
 __ https://ostreedev.github.io/ostree/
 
@@ -331,17 +331,17 @@ To build these images, run the following:
 .. code-block:: shell
 
     # Build all images...
-    make images-tests
+    make images/test
 
     # ... or just a single one:
-    make images-tests/tmt/tests/container/fedora/rawhide:latest
+    make images/test/tmt/container/test/fedora/rawhide:latest
 
 Tests that need to use various container images should trigger this
 command before running the actual test cases:
 
 .. code-block:: bash
 
-    rlRun "make -C images-tests"
+    rlRun "make -C images/test"
 
 To list built container images, run the following:
 
@@ -353,7 +353,7 @@ To remove these images from your local system, run the following:
 
 .. code-block:: shell
 
-    make clean-test-images
+    make clean/images/test
 
 
 .. _docs:
@@ -499,6 +499,27 @@ variable to include additional file:
     override theme CSS, it is recommended to add ``!important`` flag.
 
 
+tldr pages
+------------------------------------------------------------------
+
+The ``tldr`` pages are maintained in the central `tldr-pages`__
+repository. To modify existing pages or add new ones, submit your
+changes directly there by following their `contribution
+guidelines`__.
+
+Translations of existing pages into other languages are welcomed.
+If you'd like to help translate pages, please follow the same
+contribution process described above.
+
+__ https://github.com/tldr-pages/tldr
+__ https://github.com/tldr-pages/tldr/blob/main/CONTRIBUTING.md
+
+.. note::
+
+   Changes made directly to documentation in this repository will
+   not be reflected in the tldr pages collection.
+
+
 Pull Requests
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -511,6 +532,12 @@ During the pull request review it is recommended to add new
 commits with your changes on the top of the branch instead of
 amending the original commit and doing a force push. This will
 make it easier for the reviewers to see what has recently changed.
+
+It's good to keep the pull request up-to-date with the ``main``
+branch. Rebase regularly or use ``/packit build`` command in the
+pull request comment if there were significant changes on the
+default branch otherwise newly added tests might cause unexpected
+and irrelevant failures in your test jobs.
 
 Once the pull request has been successfully reviewed and all tests
 passed, please rebase on the latest ``main`` branch content and
@@ -582,6 +609,9 @@ Each completed pull request review helps you, little by little, to
 get familiar with larger part of the project code and empowers you
 to contribute more easily in the future.
 
+Pull requests ready for review can be easily filtered and found at
+the `review tab`__.
+
 For instructions how to locally try a change on your laptop see
 the :ref:`develop` section. Basically just enable the development
 environment and check out the pull request branch or use the
@@ -617,6 +647,7 @@ Even partial review which happens sooner is beneficial, saves
 time. Every single comment helps to improve and move the project
 forward. No question is a dumb question. Every feedback counts!
 
+__ https://github.com/orgs/teemtee/projects/1/views/6
 __ https://cli.github.com
 
 
@@ -685,7 +716,14 @@ Regular
 
 Follow the steps below to create a new major or minor release:
 
-* Update ``overview.rst`` with new contributors since the last release
+* Update ``overview.rst`` with new contributors since the last
+  release. To identify contributors whose first ever commit to
+  the repository occurred *after* the last release tag, run:
+
+  .. code-block:: bash
+
+     ./scripts/list-new-contributors
+
 * Review the release notes in ``releases.rst``, update as needed
 * Add a ``Release x.y.z`` commit, empty if needed: ``git commit --allow-empty -m "Release x.y.z"``
 * Create a pull request with the commit, ensure tests pass, merge it
@@ -703,9 +741,8 @@ Create a new `github release`__ based on the tag above
 Finally, if everything went well:
 
 * Close the corresponding release milestone
-* Once the non development `copr build`__ is completed, move the
-  ``quay`` branch to point to the release commit as well to build
-  fresh `container images`__.
+* Once the non development `copr build`__ is completed, run the
+  `publish-images`__ workflow to build fresh container image.
 
 Handle manually what did not went well:
 
@@ -719,8 +756,8 @@ Handle manually what did not went well:
 __ https://github.com/teemtee/tmt/releases/
 __ https://tmt.readthedocs.io/en/stable/releases.html
 __ https://src.fedoraproject.org/rpms/tmt/pull-requests
-__ https://copr.fedorainfracloud.org/coprs/g/teemtee/tmt/builds/
-__ https://quay.io/repository/teemtee/tmt
+__ https://copr.fedorainfracloud.org/coprs/g/teemtee/stable/builds/
+__ https://github.com/teemtee/tmt/actions/workflows/publish-images.yml
 __ https://pypi.org/project/tmt/
 
 
@@ -739,3 +776,31 @@ fix needs to be released before the regular schedule:
 * Tag the commit and publish the release in the same way as for
   regular release
 * Create a pull request with the hotfix release notes changes
+
+
+Releaser
+------------------------------------------------------------------
+
+Taking care of a new ``tmt`` release is not just about performing
+the final steps described above. In this role you should shepherd
+the issues and pull requests like sheep so that they make it to
+the ``main`` branch by the proposed deadline. Here's a couple of
+recommendations which could help you to make the release process
+smooth and timely:
+
+* continually watch the issues & pull requests and gently push
+  them forward if any of them seems to get stuck
+* bring attention especially to those with the high priority, the
+  ``priority | must`` issues and pull requests should be finished
+  ideally one week before the release deadline
+* regularly check the pull request progress and highlight those
+  which are waiting for feedback on the review sessions
+* if there is anything not clear and needs discussion bring it to
+  the chat or raise the topic on the weekly sessions
+* do not hesitate to contact assignees directly, e.g. on the chat,
+  if there is no update for a longer time, consider also
+  reassigning the issue to another contributor if necessary
+* if there are pull requests ready for merging but not included in
+  the release, it might make sense to squeeze them in, to make the
+  development more fluent, just make sure they do not slow down
+  important issues

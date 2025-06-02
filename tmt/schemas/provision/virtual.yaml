@@ -25,6 +25,9 @@ properties:
   image:
     type: string
 
+  hardware:
+    $ref: "/schemas/provision/hardware#/definitions/hardware"
+
   user:
     type: string
 
@@ -51,6 +54,12 @@ properties:
 
   role:
     $ref: "/schemas/common#/definitions/role"
+
+  stop-retries:
+    type: number
+
+  stop-retry-delay:
+    type: number
 
 required:
   - how

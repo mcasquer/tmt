@@ -259,11 +259,15 @@ Then you can install either everything or only those you need::
     sudo dnf install tmt-redhat-all
     sudo dnf install tmt-redhat-*
 
-Impatient to try the fresh features as soon as possible? Install
-the latest greatest version from the ``copr`` repository::
+Do you like to check the released bits as soon as they are out?
+Enable the ``stable`` copr repository and install from there::
 
-    sudo dnf copr enable @teemtee/tmt
-    sudo dnf install tmt
+    sudo dnf copr enable @teemtee/stable
+
+Impatient to try the fresh features as soon as they are merged
+into the ``main`` branch? Enable the ``latest`` copr repository::
+
+    sudo dnf copr enable @teemtee/latest
 
 Not sure, just want to try out how it works? Experiment safely and
 easily inside a container::
@@ -403,10 +407,23 @@ TMT_FORCE_COLOR
 
 TMT_SHOW_TRACEBACK
     By default, when tmt reports an error, the corresponding
-    traceback is not printed out. When ``TMT_SHOW_TRACEBACK`` is
-    set to any string except ``0``, traceback would be printed out.
-    When set to ``full``, traceback would list also local variables
-    in each stack frame.
+    traceback is not printed out. By setting this variable, the
+    traceback and details would be shown:
+
+    TMT_SHOW_TRACEBACK=0 (or unset)
+        Render only exception and its causes.
+
+    TMT_SHOW_TRACEBACK=1
+        Render also call stack for exception and each of its causes.
+
+    TMT_SHOW_TRACEBACK=2
+        Render also call stack for exception and each of its causes,
+        plus all local variables in each frame, trimmed to first 1024
+        characters of their values.
+
+    TMT_SHOW_TRACEBACK=full
+        Render everything that can be show: all causes, their call
+        stacks, all frames and all locals in their completeness.
 
 TMT_OUTPUT_WIDTH
     By default, the output width of commands like ``tmt * show`` is constrained
@@ -475,7 +492,7 @@ TMT_SCRIPTS_DIR
 
     .. versionadded:: 1.38
 
-__ https://tmt.readthedocs.io/en/stable/spec/plans.html#tmt
+__ https://tmt.readthedocs.io/en/stable/plugins/execute.html#tmt
 
 TMT_SSH_*
     Every environment variable in this format would be treated as an SSH
@@ -507,8 +524,9 @@ during ``prepare``, ``execute`` and ``finish`` steps:
 
 TMT_TREE
     The full path of the working directory where the metadata tree
-    is copied. This usually contains the whole git repository from
-    which tests have been executed.
+    is copied. This usually contains the whole git repository where
+    tmt plans are located in. Notice that it might not contain tmt
+    tests if tmt plans and tests are in different git repositories.
 
 TMT_PLAN_DATA
     Path to the common directory used for storing logs and other
@@ -612,6 +630,8 @@ TMT_TEST_PIDFILE_ROOT
     of temporary directory permissions, e.g. ``chmod 1777``, to
     allow access to users with all privilege levels.
 
+.. _plugin-variables:
+
 Plugin Variables
 ----------------
 
@@ -668,6 +688,9 @@ example, an interactive mode would be enabled in this run::
       # Here the environment variable will take effect:
       $ TMT_PLUGIN_DISCOVER_FMF_VERBOSE=2 tmt run -a discover -h fmf ...
 
+   Several plugins (``report -h reportportal``, ``report -h polarion``,
+   ``execute -h tmt``) allow selected variables to be processed,
+   even when plugin is not specified on the command line.
 
 .. _regular-expressions:
 
@@ -733,7 +756,7 @@ Releases:
 https://tmt.readthedocs.io/en/stable/releases.html
 
 Copr:
-https://copr.fedorainfracloud.org/coprs/g/teemtee/tmt/
+https://copr.fedorainfracloud.org/coprs/g/teemtee/stable/
 
 PIP:
 https://pypi.org/project/tmt/
@@ -777,7 +800,9 @@ James Molet, Cristian Le, Lili Nie, Martin Čermák, Michael Vogt,
 Qinghua Cheng, Michael Engel, Anatoli Babenia, Colin Walters,
 Link Dupont, Mario Casquero, Martin Klusoň, Pavel Holica,
 Otto Šabart, Ismail Ibrahim Quwarah, Sergei Petrosian, Tom
-Koscielniak, Han Han and Luigi Pellecchia.
+Koscielniak, Han Han, Luigi Pellecchia, Siteshwar Vashisht,
+Chris Kyrouac, Xiaofeng Wang, Coiby Xu, Michal Pospíšil, Wayne
+Sun, Evgeni Vakhonin and Mike Stowell.
 
 
 Copyright
