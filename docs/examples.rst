@@ -537,6 +537,30 @@ the :ref:`/spec/plans/discover` step:
         url: https://src.fedoraproject.org/rpms/tmt/
 
 
+Share Tests Across Repositories
+------------------------------------------------------------------
+
+Another way to efficiently manage tests is by sharing them across repositories.
+This can be achieved by referencing the repository containing shared tests
+within the ``discover`` step of a plan. TMT will then fetch the tests from the
+specified URL and make them available for execution alongside project-specific
+tests. This promotes reusability and reduces duplication of common test cases.
+
+.. code-block:: yaml
+
+    discover:
+      - name: shared-tests
+        how: fmf
+        url: https://example.com/path/to/shared-tests.git
+        # Optionally, specify a branch or tag
+        # ref: main
+      - name: project-specific-tests
+        how: fmf
+        # Assuming tests are in the current repository
+        # url: .
+        # filter: ...
+
+
 Extend Steps
 ------------------------------------------------------------------
 
