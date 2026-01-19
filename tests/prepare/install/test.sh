@@ -119,10 +119,6 @@ rlJournalStart
 
                 fi
 
-            elif is_ubi_8 "$image"; then
-                rlRun "distro=rhel-8"
-                rlRun "package_manager=dnf"
-
             elif is_alpine "$image"; then
                 rlRun "distro=alpine"
                 rlRun "package_manager=apk"
@@ -156,11 +152,7 @@ rlJournalStart
         fi
 
         rlPhaseStartTest "$phase_prefix Install existing packages (CLI)"
-            if is_ubi "$image"; then
-                rlRun -s "$tmt --insert --how install --package dconf --package libpng plan --name /empty"
-            else
-                rlRun -s "$tmt --insert --how install --package tree --package diffutils plan --name /empty"
-            fi
+            rlRun -s "$tmt --insert --how install --package tree --package diffutils plan --name /empty"
 
             rlAssertGrep "package manager: $package_manager$" $rlRun_LOG
 
@@ -317,7 +309,7 @@ rlJournalStart
         # TODO: at least copr is RH-specific, but package name escaping and debuginfo should be
         # possible to extend to other distros.
         if (is_fedora "$image" && ! is_fedora_coreos "$image") || is_centos "$image" || is_ubi "$image"; then
-            if ! is_centos_7 "$image" && ! is_ubi_8 "$image"; then
+            if ! is_centos_7 "$image"; then
                 rlPhaseStartTest "$phase_prefix Just enable copr"
                     rlRun "$tmt execute plan --name copr"
                 rlPhaseEnd
@@ -340,12 +332,6 @@ rlJournalStart
             if is_centos_stream_9 "$image"; then
                 rlPhaseStartTest "$phase_prefix Install remote packages"
                     rlRun "$tmt execute plan --name epel9-remote"
-                rlPhaseEnd
-            fi
-
-            if is_ubi_8 "$image"; then
-                rlPhaseStartTest "$phase_prefix Install remote packages"
-                    rlRun "$tmt execute plan --name epel8-remote"
                 rlPhaseEnd
             fi
 
